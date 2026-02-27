@@ -11,26 +11,26 @@
         
         .controls { 
             background: white; 
-            padding: 25px; 
+            padding: 15px 20px; 
             border-radius: 12px; 
             box-shadow: 0 4px 12px rgba(0,0,0,0.08); 
-            margin-bottom: 25px; 
+            margin-bottom: 15px; 
         }
 
         .control-sections {
             display: flex;
             flex-wrap: wrap;
-            gap: 30px;
+            gap: 15px;
             align-items: flex-start;
         }
 
         .section-group {
             display: flex;
             flex-direction: column;
-            gap: 15px;
-            padding: 10px;
+            gap: 8px;
+            padding: 5px 10px;
             border-left: 3px solid #e0e0e0;
-            padding-left: 20px;
+            padding-left: 15px;
         }
         
         .section-group:first-child { border-left: none; padding-left: 0; }
@@ -41,7 +41,7 @@
         .sub-label { font-size: 0.85rem; color: #666; font-weight: 600; }
 
         input[type="text"], input[type="number"], select { 
-            padding: 8px; 
+            padding: 6px; 
             border: 1px solid #ccc; 
             border-radius: 6px;
         }
@@ -60,7 +60,7 @@
 
         .btn-group { display: flex; }
         .btn-group button {
-            padding: 8px 16px;
+            padding: 6px 12px;
             cursor: pointer;
             border: 1px solid #ced4da;
             background-color: #f8f9fa;
@@ -79,14 +79,14 @@
         .btn-group button.active { background-color: #6c757d; color: white; border-color: #6c757d; }
 
         .action-btn {
-            padding: 10px 20px;
+            padding: 8px 16px;
             background-color: #198754;
             color: white;
             border: none;
             border-radius: 6px;
             cursor: pointer;
             font-weight: 600;
-            margin-top: 10px;
+            margin-top: 5px;
         }
         .action-btn:hover { background-color: #157347; }
         
@@ -205,7 +205,7 @@
                 </div>
                 <div class="control-item">
                      <label>1. Choose Mode</label>
-                     <button class="action-btn mode-toggle-btn" id="viewToggleBtn" onclick="cycleView()" style="margin-top: 0;">Switch to Map View</button>
+                     <button class="action-btn mode-toggle-btn" id="viewToggleBtn" onclick="cycleView()" style="margin-top: 0;">Switch to Graph View</button>
                 </div>
             </div>
 
@@ -275,7 +275,7 @@
 
                     <div class="control-item">
                         <span class="sub-label">Point Scaling</span>
-                        <input type="range" id="sizeSlider" min="0" max="100" value="100">
+                        <input type="range" id="sizeSlider" min="0" max="100" value="50">
                     </div>
 
                     <div class="control-item" style="justify-content: center;">
@@ -287,7 +287,7 @@
                 </div>
             </div>
 
-            <div class="section-group">
+            <div class="section-group" id="title-section">
                 <div class="control-item">
                     <label>4. Title</label>
                     <input type="text" id="graphTitle" value="City Bike Performance: Avg Score vs Best Area">
@@ -300,12 +300,10 @@
         </div>
     </div>
 
-    <div id="chart-container"></div>
-    
-    <div id="map-container"></div>
-
-    <div id="list-view-container">
-        <div class="list-grid" id="listGrid"></div>
+    <div id="chart-container" class="hidden"></div>
+	<div id="map-container" style="display: block;"></div>
+	<div id="list-view-container">
+		<div class="list-grid" id="listGrid"></div>
     </div>
 
     <script>
@@ -947,7 +945,12 @@
 		let zoomTimeout = null; // NEW: For smoothing out the zoom limit
         let currentFocus = 'Balanced';
         let currentLabelMode = 'None'; 
-        let currentView = 'graph'; 
+        let currentView = 'map'; // Starts on map
+		// CHANGED: Split the title memory so Map and Graph track their custom titles independently
+        let userEditedMapTitle = false; 
+        let customMapTitle = "";
+        let userEditedGraphTitle = false;
+        let customGraphTitle = "";
         let currentIndivStat = 'Safe Area (sq mi)'; 
         let statReverse = false; 
         let neighborDispReverse = false; 
@@ -956,7 +959,20 @@
         let copenhagenReverse = true; 
 
         document.getElementById('csvFile').addEventListener('change', handleFileUpload);
-        document.getElementById('graphTitle').addEventListener('input', updateView);
+        // CHANGED: Routes the custom title to the correct memory bank based on the active view.
+        // Uses Plotly.relayout to instantly update the text on the screen without freezing the app.
+        document.getElementById('graphTitle').addEventListener('input', (e) => {
+            const newText = e.target.value;
+            if (currentView === 'map') {
+                userEditedMapTitle = true;
+                customMapTitle = newText;
+                Plotly.relayout('map-container', { title: newText });
+            } else if (currentView === 'graph') {
+                userEditedGraphTitle = true;
+                customGraphTitle = newText;
+                Plotly.relayout('chart-container', { title: newText });
+            }
+        });
         document.getElementById('sizeSlider').addEventListener('input', updateView);
         document.getElementById('forceCircle').addEventListener('change', updateView);
 		// NEW: Hidden admin override. Press Ctrl + Shift + U to trigger the invisible upload button.
@@ -1006,39 +1022,55 @@
             const graphOpts = document.getElementById('graph-options');
             const mapControl = document.getElementById('map-control');
             const aggControl = document.getElementById('agg-control');
+            const titleSection = document.getElementById('title-section'); // <-- THIS WAS MISSING!
             const chartC = document.getElementById('chart-container');
             const mapC = document.getElementById('map-container');
             const listC = document.getElementById('list-view-container');
 
-            if (currentView === 'graph') {
-                currentView = 'map';
-                btn.textContent = "Switch to List View";
-                graphOpts.classList.add('hidden');
-                chartC.classList.add('hidden');
-                mapC.style.display = 'block';
-                listC.style.display = 'none';
-                mapControl.classList.remove('hidden');
-                aggControl.classList.remove('hidden'); // Map uses aggregation now
-            } else if (currentView === 'map') {
-                currentView = 'list';
-                btn.textContent = "Switch to Graph View";
-                graphOpts.classList.add('hidden');
-                chartC.classList.add('hidden');
-                mapC.style.display = 'none';
-                listC.style.display = 'block';
-                mapControl.classList.add('hidden');
-                aggControl.classList.remove('hidden');
-            } else {
+            if (currentView === 'map') {
+                // Switch TO Graph
                 currentView = 'graph';
-                btn.textContent = "Switch to Map View";
+                btn.textContent = "Switch to List View";
+                
                 graphOpts.classList.remove('hidden');
                 chartC.classList.remove('hidden');
+                titleSection.classList.remove('hidden'); // Ensure visible
+                
                 mapC.style.display = 'none';
                 listC.style.display = 'none';
                 mapControl.classList.add('hidden');
                 aggControl.classList.add('hidden');
+                
+            } else if (currentView === 'graph') {
+                // Switch TO List
+                currentView = 'list';
+                btn.textContent = "Switch to Map View";
+                
+                graphOpts.classList.add('hidden');
+                chartC.classList.add('hidden');
+                titleSection.classList.add('hidden'); // Hide title in list view
+                
+                mapC.style.display = 'none';
+                listC.style.display = 'block';
+                mapControl.classList.add('hidden');
+                aggControl.classList.remove('hidden');
+                
+            } else {
+                // Switch TO Map
+                currentView = 'map';
+                btn.textContent = "Switch to Graph View";
+                
+                graphOpts.classList.add('hidden');
+                chartC.classList.add('hidden');
+                titleSection.classList.remove('hidden'); // Ensure visible
+                
+                mapC.style.display = 'block';
+                listC.style.display = 'none';
+                mapControl.classList.remove('hidden');
+                aggControl.classList.remove('hidden');
             }
-            updateView();
+            
+                updateView();
         }
 
         function setFocus(focusType) {
@@ -1291,8 +1323,8 @@
                 const region = getRegion(formattedLoc);
                 if (regionFilter !== 'All' && region !== regionFilter) return;
                 
-                const infraRatio = cleanNum(row['Infra ratio'], true);
-                const destRatio = cleanNum(row['Dest ratio'], true);
+                const infraRatio = cleanNum(row['Infra ratio'], true)|| 0;
+                const destRatio = cleanNum(row['Dest ratio'], true)|| 0;
                 const popBasedSize = Math.pow(pop, 0.33) / 4.2;
                 const fixedSize = 10; 
                 const finalSize = (fixedSize * (1 - scaleFactor)) + (popBasedSize * scaleFactor);
@@ -1397,15 +1429,27 @@
         function updateMap() {
             const mapLevel = document.getElementById('mapLevel').value;
             const aggMode = document.getElementById('aggFilter').value; 
-            // Build the focus label: only add if not Balanced
-			const focusLabel = currentFocus === 'Balanced' ? '' : ` (${currentFocus} Focus)`;
-            // CHANGED: Build a normalized dictionary on the fly that ignores ALL spaces, capitalization, and punctuation
+            const focusLabel = currentFocus === 'Balanced' ? '' : ` (${currentFocus} Focus)`;
+            
+            // CHANGED: Map-specific title logic
+            let defaultTitle = mapLevel === 'City' 
+                ? `City Scores ("${aggMode}")${focusLabel}` 
+                : (mapLevel === 'Country' 
+                    ? `Highest "${aggMode}" Score by Country${focusLabel}` 
+                    : `Highest "${aggMode}" Score By Country/Region${focusLabel}`);
+                    
+            let displayTitle = userEditedMapTitle ? customMapTitle : defaultTitle;
+
+            // Sync the input box so it displays the map title when you switch modes
+            if (currentView === 'map') {
+                document.getElementById('graphTitle').value = displayTitle;
+            }
+            
             const NORMALIZED_COORDS = {};
             Object.keys(CITY_COORDS).forEach(key => {
                 const cleanKey = key.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                 NORMALIZED_COORDS[cleanKey] = CITY_COORDS[key];
                 
-                // Map the city-only part as a fallback
                 const cityPart = key.split(',')[0].replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                 if (!NORMALIZED_COORDS[cityPart]) NORMALIZED_COORDS[cityPart] = CITY_COORDS[key];
             });
@@ -1432,13 +1476,10 @@
                     
                     let lookupKey = (d.city || "").trim() + ", " + (d.state || "").trim();
 
-                    // CHANGED: Now checks if EITHER latitude or longitude is NaN to trigger the fallback dictionary lookup
                     if (isNaN(lat) || isNaN(lon)) {
-                        // CHANGED: Strip everything but letters and numbers from the CSV strings to guarantee a match
                         let cleanLookup = ((d.city || "") + (d.state || "")).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
                         let cleanCityOnly = (d.city || "").replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-                        // Match against our bulletproof normalized dictionary
                         let match = NORMALIZED_COORDS[cleanLookup] || NORMALIZED_COORDS[cleanCityOnly];
 
                         if (match) {
@@ -1489,7 +1530,7 @@
                         "Highest Point: %{customdata[4]:.1f}<br>" +
                         "Focus Disp: %{customdata[3]:.1f}<extra></extra>"
                 }], {
-                    title: `City Scores ("${aggMode}")${focusLabel}`,
+                    title: displayTitle, // CHANGED: Was hardcoded to a string template
                     uirevision: 'true',
                     geo: { 
                         domain: { x: [0, 0.98] },
@@ -1509,7 +1550,6 @@
                 const usAgg = {};
                 const canAgg = {};
                 const ausAgg = {};
-                
                 const edgeAgg = {};
 
                 const CAN_NAMES = {
@@ -1663,13 +1703,8 @@
                     });
                 }
 
-					
-
-				Plotly.react('map-container', traces, {
-					// Updated: Changed (Hybrid Data) to By Country/Region and added dynamic focusLabel
-					title: mapLevel === 'Country' 
-						? `Highest "${aggMode}" Score by Country${focusLabel}` 
-						: `Highest "${aggMode}" Score By Country/Region${focusLabel}`,
+                Plotly.react('map-container', traces, {
+                    title: displayTitle, // CHANGED: Was hardcoded to a string template
                     uirevision: 'true',
                     geo: { 
                         domain: { x: [0, 0.98] },
@@ -1732,10 +1767,18 @@
         }
 		
         // --- GRAPH & LIST UPDATE FUNCTIONS ---
+        // CHANGED: Now uses its own graph-specific title memory and syncs the text box
         function updatePlot() {
             let allData = processDataForGraph();
-            const title = document.getElementById('graphTitle').value;
             const forceCircle = document.getElementById('forceCircle').checked;
+            
+            let defaultTitle = "City Bike Performance: Avg Score vs Best Area";
+            let displayTitle = userEditedGraphTitle ? customGraphTitle : defaultTitle;
+            
+            // Sync the input box so it displays the correct graph title when you switch modes
+            if (currentView === 'graph') {
+                document.getElementById('graphTitle').value = displayTitle;
+            }
             
             const annotations = [];
             if (currentLabelMode !== 'None') {
@@ -1762,8 +1805,16 @@
                 marker: {
                     colorscale: [[0, 'blue'], [0.5, 'gray'], [1, 'green']],
                     cmin: -0.2, cmax: 0.2, showscale: true,
-                    colorbar: { title: 'Dest (Blue) <-> Infra (Green)', len: 0.5, y: 0.25, yanchor: 'bottom' }
-                }
+                    colorbar: { 
+                        title: '', 
+                        len: 0.5, 
+                        y: 0.25, 
+                        yanchor: 'bottom',
+                        tickmode: 'array',
+                        tickvals: [-0.2, 0.2], 
+                        ticktext: ['Better for<br>Destinations', 'Better for<br>Infrastructure']
+                    }
+				}
             });
 
             regions.forEach(region => {
@@ -1794,12 +1845,13 @@
             });
 
             Plotly.react('chart-container', traces, {
-                title: title, xaxis: { title: "City Wide Score", range:[24,108] }, yaxis: { title: "Best Area Score", range:[24,108] },
+                title: displayTitle, // CHANGED: Now properly applies the title
+                xaxis: { title: "City Wide Score", range:[24,108] }, yaxis: { title: "Best Area Score", range:[24,108] },
                 template: "plotly_white", margin: { l:60, r:40, t:80, b:60 }, height: 750,
-                uirevision: 'true', // CHANGED: Prevents graph zoom reset
-				legend: { title: { text: forceCircle ? '' : 'Region' } },
+                uirevision: 'true', 
+                legend: { title: { text: forceCircle ? '' : 'Region' } },
                 annotations: annotations
-			}, { responsive: true }); // CHANGED: Added config for responsiveness
+            }, { responsive: true }); 
         }
 
         function updateList() {
@@ -1867,5 +1919,24 @@
             createCard({ title: "Copenhagen Rankings", data: targetData, key: 'Copenhagen rank dif', reverse: copenhagenReverse, type: 'copenhagen' });
         }
     </script>
+	
+	<div style="margin-top: 40px; padding: 25px; background-color: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; max-width: 2300px; margin: 40px auto 20px auto;">
+        <h3 style="margin-top: 0; color: #444; font-size: 0.9rem;">Support the Bike Friendliness Index</h3>
+        <p style="font-size: 0.8rem; color: #555; max-width: 800px; margin: 0 auto 15px auto; line-height: 1.5;">
+            Want to request a new location be added, receive a full city analysis, or just want to support the project?
+        </p>
+        <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
+            <a href="https://www.paypal.com/donate/?business=JSMHLH5VXWH8G&no_recurring=0&item_name=Creator+of+the+Bike+Friendliness+Index&currency_code=USD" target="_blank" style="display: inline-block; background-color: #003087; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: background-color 0.2s;">
+                Support via PayPal
+            </a>
+			<!--<a href="YOUR_VENMO_LINK_HERE" target="_blank" style="display: inline-block; background-color: #008CFF; color: white; padding: 10px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; transition: background-color 0.2s;">
+                Support via Venmo
+            </a>-->
+            
+        </div>
+		<p style="font-size: 0.8rem; color: #666; margin: 0;">
+            This was a lot of work so I hope you enjoy! This is still a work in progress as I tweak the calculations and add new cities. Let me know if you have any suggestions, or feel free to ask questions, by contacting me at <a href="mailto:comments@bikefriendlinessindex.org" style="color: #0d6efd; text-decoration: none; font-weight: 600;">comments@bikefriendlinessindex.org</a>
+        </p>
+    </div>
 </body>
 </html>
