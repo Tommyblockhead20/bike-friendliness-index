@@ -244,7 +244,7 @@
                 <label>3. View Settings</label>
                 
                 <div style="display: flex; flex-wrap: wrap; gap: 20px;">
-                    <div id="agg-control" class="control-item hidden">
+                    <div id="agg-control" class="control-item">
                         <span class="sub-label">Data Aggregation</span>
                         <select id="aggFilter" onchange="updateView()">
                             <option value="City Wide">City Wide</option>
@@ -253,7 +253,7 @@
                         </select>
                     </div>
 
-                    <div id="map-control" class="control-item hidden">
+                    <div id="map-control" class="control-item">
                         <span class="sub-label">Map Level</span>
                         <select id="mapLevel" onchange="updateView()">
                             <option value="Country">Country (Best City)</option>
@@ -263,7 +263,7 @@
                     </div>
                 </div>
 
-                <div id="graph-options" style="display: flex; flex-wrap: wrap; gap: 20px;">
+                <div id="graph-options" class="hidden" style="display: flex; flex-wrap: wrap; gap: 20px;">
                     <div class="control-item">
                         <span class="sub-label">Graph Labels</span>
                         <div class="btn-group" id="labelButtons">
@@ -1935,9 +1935,8 @@
             
         </div>
 		<p style="font-size: 0.8rem; color: #666; margin: 0;">
-            This was a lot of work so I hope you enjoy! This is still a work in progress as I tweak the calculations and add new cities. Let me know if you have any suggestions, or feel free to ask questions, by contacting me at <a href="mailto:comments@bikefriendlinessindex.org" style="color: #0d6efd; text-decoration: none; font-weight: 600;">comments@bikefriendlinessindex.org</a>
+            This was a lot of work so I hope you enjoy! This is still a work in progress as I tweak the calculations and add new cities. Let me know if you have any suggestions, or feel free to ask questions, by contacting me at <a href="mailto:comments@bikefriendlinessindex.org" style="color: #0d6efd; text-decoration: none; font-weight: 600;">comments@bikefriendlinessindex.org.</a>
         </p>
     </div>
 </body>
 </html>
-
