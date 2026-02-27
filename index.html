@@ -197,29 +197,20 @@
 
     <div class="controls">
         <div class="control-sections">
+            
             <div class="section-group">
-                <div class="control-item">
-                    <label>1. Select Data Source</label>
+                <div class="control-item" style="display: none;">
+                    <label>Data Source</label>
                     <input type="file" id="csvFile" accept=".csv">
                 </div>
                 <div class="control-item">
-                     <button class="action-btn mode-toggle-btn" id="viewToggleBtn" onclick="cycleView()">Switch to Map View</button>
+                     <label>1. Choose Mode</label>
+                     <button class="action-btn mode-toggle-btn" id="viewToggleBtn" onclick="cycleView()" style="margin-top: 0;">Switch to Map View</button>
                 </div>
             </div>
 
             <div class="section-group">
-                <div class="control-item">
-                    <label>2. Graph Title</label>
-                    <input type="text" id="graphTitle" value="City Bike Performance: Avg Score vs Best Area">
-                </div>
-                <div class="control-item">
-                    <button class="action-btn" onclick="downloadChart()">Download Chart Image</button>
-                </div>
-            </div>
-
-            <div class="section-group" style="flex: 1;">
-                <label>3. Global Options</label>
-                
+                <label>2. Global Filters</label>
                 <div style="display: flex; flex-wrap: wrap; gap: 20px;">
                     <div class="control-item">
                         <span class="sub-label">Focus</span>
@@ -237,12 +228,28 @@
                             oninput="handlePopChange(this)">
                     </div>
                     
-                    <div id="agg-control" class="control-item">
+                    <div class="control-item">
+                        <span class="sub-label">Region Filter</span>
+                        <select id="regionFilter" onchange="updateView()">
+                            <option value="All">All Regions</option>
+                            <option value="North America">North America</option>
+                            <option value="Europe">Europe</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-group" style="flex: 1;">
+                <label>3. View Settings</label>
+                
+                <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                    <div id="agg-control" class="control-item hidden">
                         <span class="sub-label">Data Aggregation</span>
                         <select id="aggFilter" onchange="updateView()">
                             <option value="City Wide">City Wide</option>
                             <option value="Best Area">Best Area</option>
-							<option value="Highest Point">Highest Point</option>
+                            <option value="Highest Point">Highest Point</option>
                         </select>
                     </div>
 
@@ -254,19 +261,9 @@
                             <option value="City">City Bubbles</option>
                         </select>
                     </div>
-
-                    <div class="control-item">
-                        <span class="sub-label">Region Filter</span>
-                        <select id="regionFilter" onchange="updateView()">
-                            <option value="All">All Regions</option>
-                            <option value="North America">North America</option>
-                            <option value="Europe">Europe</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
                 </div>
 
-                <div id="graph-options" style="margin-top: 15px; border-top: 1px dashed #ccc; padding-top: 10px; display: flex; gap: 20px;">
+                <div id="graph-options" style="display: flex; flex-wrap: wrap; gap: 20px;">
                     <div class="control-item">
                         <span class="sub-label">Graph Labels</span>
                         <div class="btn-group" id="labelButtons">
@@ -289,6 +286,17 @@
                     </div>
                 </div>
             </div>
+
+            <div class="section-group">
+                <div class="control-item">
+                    <label>4. Title</label>
+                    <input type="text" id="graphTitle" value="City Bike Performance: Avg Score vs Best Area">
+                </div>
+                <div class="control-item">
+                    <button class="action-btn" onclick="downloadChart()" style="margin-top: 0;">Download Chart Image</button>
+                </div>
+            </div>
+            
         </div>
     </div>
 
@@ -951,6 +959,36 @@
         document.getElementById('graphTitle').addEventListener('input', updateView);
         document.getElementById('sizeSlider').addEventListener('input', updateView);
         document.getElementById('forceCircle').addEventListener('change', updateView);
+		// NEW: Hidden admin override. Press Ctrl + Shift + U to trigger the invisible upload button.
+		// CHANGED: Updated hidden admin override to use Alt + U to prevent OS shortcut hijacking
+        document.addEventListener('keydown', function(event) {
+            // event.code === 'KeyU' works perfectly regardless of uppercase/lowercase/Shift
+            if (event.altKey && event.code === 'KeyU') {
+                event.preventDefault(); 
+                document.getElementById('csvFile').click();
+            }
+        });
+		
+		// NEW FUNCTION: Automatically fetches the public data on page load.
+		// PapaParse has a built-in 'download: true' flag that handles the fetch API for you.
+		function loadDefaultData() {
+			Papa.parse("data_for_web.csv", {
+				download: true, 
+				header: true, 
+				skipEmptyLines: true,
+				complete: function(results) {
+					rawData = results.data;
+					updateView(); // Automatically builds the map and lists
+				},
+				error: function(err) {
+					// Fails silently for the user, but tells you in the F12 console if the file is missing
+					console.warn("Default web data not found. Awaiting manual upload.", err);
+				}
+			});
+		}
+
+		// CHANGED: Trigger the default load the second the HTML is done rendering
+		window.addEventListener('DOMContentLoaded', loadDefaultData);
 
         function handlePopChange(el) {
             let val = parseFloat(el.value);
@@ -1137,7 +1175,67 @@
             return isRatio ? num / 100.0 : num;
         };
 
-    
+        // CHANGED: processDataForGraph - Added defensive text formatting and console warnings for missing data
+        function processDataForGraph() {
+            const minPopVal = parseFloat(document.getElementById('minPop').value) || 0;
+            const regionFilter = document.getElementById('regionFilter').value;
+            const sliderVal = parseFloat(document.getElementById('sizeSlider').value);
+            const scaleFactor = sliderVal / 100.0;
+            
+            // CHANGED: Made Focus and Aggregation filters ignore case and accidental spaces
+            let filtered = rawData.filter(row => {
+                const f = (row['Focus'] || "").trim().toLowerCase();
+                const a = (row['Aggregation'] || "").trim().toLowerCase();
+                return f === currentFocus.toLowerCase() && a === 'city wide';
+            });
+            
+            const seenCities = new Set();
+            filtered = filtered.filter(row => {
+                const cityKey = row['City/municipality'] + '|' + row['State/ Country'];
+                if (seenCities.has(cityKey)) return false;
+                seenCities.add(cityKey);
+                return true;
+            });
+
+            const processed = [];
+            filtered.forEach(row => {
+                const pop = cleanNum(row['Population'], false);
+                const avgScore = cleanNum(row['Average Score'], false);
+                const disparity = cleanNum(row['Disparity'], false);
+                
+                // CHANGED: If a city is missing core data, drop it but log exactly why to the F12 Developer Console
+                if (isNaN(avgScore) || isNaN(disparity) || isNaN(pop)) {
+                    console.warn(`Graph Drop -> ${row['City/municipality']}: Missing Data (Pop: ${pop}, Score: ${avgScore}, Disp: ${disparity})`);
+                    return;
+                }
+                
+                if (pop < minPopVal) return;
+
+                const formattedLoc = formatLocation(row['State/ Country']);
+                const region = getRegion(formattedLoc);
+                if (regionFilter !== 'All' && region !== regionFilter) return;
+                
+                const infraRatio = cleanNum(row['Infra ratio'], true);
+                const destRatio = cleanNum(row['Dest ratio'], true);
+                const popBasedSize = Math.pow(pop, 0.33) / 4.2;
+                const fixedSize = 10; 
+                const finalSize = (fixedSize * (1 - scaleFactor)) + (popBasedSize * scaleFactor);
+
+                processed.push({
+                    city: row['City/municipality'],
+                    state: formattedLoc,
+                    pop: pop,
+                    avgScore: avgScore,
+                    bestAreaScore: avgScore + disparity,
+                    focusBalance: infraRatio - destRatio,
+                    sizeScaled: finalSize,
+                    region: region,
+                    raw: row
+                });
+            });
+            processed.sort((a, b) => b.sizeScaled - a.sizeScaled);
+            return processed;
+        }
 
         // CHANGED: processDataForGraph - Replaced silent filtering with a loop that tattletales on bad Focus/Agg formatting
         function processDataForGraph() {
@@ -1211,37 +1309,39 @@
                     raw: row
                 });
             });
-                        // Sort by population descending, keep top 40, then re‑sort by scaled size for graphing
-            processed.sort((a, b) => b.pop - a.pop);
-            processed = processed.slice(0, 40);
             processed.sort((a, b) => b.sizeScaled - a.sizeScaled);
             return processed;
         }
 
-                function processDataForGraph() {
+        // CHANGED: processDataForList - Applied the same aggressive Focus/Agg tattletale loop
+        function processDataForList(targetAgg) {
             const minPopVal = parseFloat(document.getElementById('minPop').value) || 0;
             const regionFilter = document.getElementById('regionFilter').value;
-            const sliderVal = parseFloat(document.getElementById('sizeSlider').value);
-            const scaleFactor = sliderVal / 100.0;
+            const popMap = {};
             
-            // CHANGED: Replaced the silent filter with a loop that logs unrecognized Focus/Aggregation types
+            rawData.filter(r => (r['Aggregation'] || "").trim().toLowerCase() === 'city wide').forEach(r => {
+                const p = cleanNum(r['Population'], false);
+                const cityKey = r['City/municipality'] + '|' + r['State/ Country'];
+                if (!isNaN(p)) popMap[cityKey] = p;
+            });
+            
+            // CHANGED: Replaced silent filter with a loop that logs unrecognized Focus/Aggregation types
             let filtered = [];
             rawData.forEach(row => {
                 const city = row['City/municipality'];
-                if (!city) return; // Skip completely empty spreadsheet rows
+                if (!city) return;
                 
                 const f = (row['Focus'] || "").trim().toLowerCase();
                 const a = (row['Aggregation'] || "").trim().toLowerCase();
                 
-                // Tattletale if the spreadsheet has weird values here
                 if (f !== 'infrastructure' && f !== 'balanced' && f !== 'destination' && f !== "") {
-                    console.warn(`Graph Filter Drop -> ${city}: Unrecognized Focus "${row['Focus']}"`);
+                    console.warn(`List Filter Drop -> ${city}: Unrecognized Focus "${row['Focus']}"`);
                 }
                 if (a !== 'city wide' && a !== 'best area' && a !== 'highest point' && a !== "") {
-                    console.warn(`Graph Filter Drop -> ${city}: Unrecognized Aggregation "${row['Aggregation']}"`);
+                    console.warn(`List Filter Drop -> ${city}: Unrecognized Aggregation "${row['Aggregation']}"`);
                 }
 
-                if (f === currentFocus.toLowerCase() && a === 'city wide') {
+                if (f === currentFocus.toLowerCase() && a === targetAgg.toLowerCase()) {
                     filtered.push(row);
                 }
             });
@@ -1253,43 +1353,36 @@
                 seenCities.add(cityKey);
                 return true;
             });
-
+            
             const processed = [];
             filtered.forEach(row => {
-                const pop = cleanNum(row['Population'], false);
-                const avgScore = cleanNum(row['Average Score'], false);
-                const disparity = cleanNum(row['Disparity'], false);
+                const city = row['City/municipality'];
+                const cityKey = city + '|' + row['State/ Country']; 
+                let pop = cleanNum(row['Population'], false);
                 
-                if (isNaN(avgScore) || isNaN(disparity) || isNaN(pop)) {
-                    console.warn(`Graph Data Drop -> ${row['City/municipality']}: Missing Data (Pop: ${pop}, Score: ${avgScore}, Disp: ${disparity})`);
+                if (isNaN(pop) && popMap[cityKey]) pop = popMap[cityKey]; 
+                
+                if (isNaN(pop)) {
+                    console.warn(`List Data Drop -> ${city}: Missing Population`);
                     return;
                 }
                 
                 if (pop < minPopVal) return;
-
+                
                 const formattedLoc = formatLocation(row['State/ Country']);
                 const region = getRegion(formattedLoc);
                 if (regionFilter !== 'All' && region !== regionFilter) return;
                 
-                const infraRatio = cleanNum(row['Infra ratio'], true);
-                const destRatio = cleanNum(row['Dest ratio'], true);
-                const popBasedSize = Math.pow(pop, 0.33) / 4.2;
-                const fixedSize = 10; 
-                const finalSize = (fixedSize * (1 - scaleFactor)) + (popBasedSize * scaleFactor);
-
+                const avgScore = cleanNum(row['Average Score'], false) || 0;
+                const disparity = cleanNum(row['Disparity'], false) || 0;
+                const focusDisparity = cleanNum(row['Focus Disparity'], false);
+                
                 processed.push({
-                    city: row['City/municipality'],
-                    state: formattedLoc,
-                    pop: pop,
-                    avgScore: avgScore,
-                    bestAreaScore: avgScore + disparity,
-                    focusBalance: infraRatio - destRatio,
-                    sizeScaled: finalSize,
-                    region: region,
-                    raw: row
+                    city: city, state: formattedLoc, pop: pop,
+                    avgScore: avgScore, disparity: disparity, bestAreaScore: avgScore + disparity,
+                    focusDisparity: focusDisparity, region: region, raw: row 
                 });
             });
-            processed.sort((a, b) => b.sizeScaled - a.sizeScaled);
             return processed;
         }
 		
@@ -1650,7 +1743,7 @@
                 if (currentLabelMode === 'Pop') labelData.sort((a, b) => b.pop - a.pop);
                 else labelData.sort((a, b) => b.avgScore - a.avgScore);
                 
-                labelData.slice(0, 60).forEach(d => {
+                labelData.slice(0, 25).forEach(d => {
                     annotations.push({
                         x: d.avgScore, y: d.bestAreaScore, text: d.city,
                         showarrow: false, yshift: (d.sizeScaled / 2) + 8,
