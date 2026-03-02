@@ -23,11 +23,6 @@
             border-radius: 16px; 
             box-shadow: 0 8px 24px rgba(0,0,0,0.04); 
             margin-bottom: 15px; 
-			width: 100%;
-            max-width: 2300px;
-            margin-left: auto;
-            margin-right: auto;
-            box-sizing: border-box;
         }
 
 		.control-sections {
@@ -132,8 +127,9 @@
         #chart-container, #map-container { 
             width: 100%; 
             max-width: 2300px; 
-			aspect-ratio: 1.9 / 1;
+            height: 70vh; 
             min-height: 500px; 
+            max-height: 1100px; 
             background: #cce0ff;             
             border-radius: 16px; 
             box-shadow: 0 8px 24px rgba(0,0,0,0.04); 
@@ -141,11 +137,6 @@
             box-sizing: border-box;
             margin: 0 auto;
             touch-action: pan-y;             /* <-- ADDED: Prevents Plotly from hijacking vertical page scrolls on mobile */
-        }
-		
-		/* CHANGED: Let mobile screens become a bit taller so the map/graph remain readable without squishing */
-        @media (max-width: 800px) { 
-            #chart-container, #map-container { aspect-ratio: 1.2 / 1; max-height: none; } 
         }
 		
 		/* ADDED: Styling for the new top header bar – deeper mint green */
@@ -158,11 +149,6 @@
             display: flex;
             align-items: center;
             gap: 12px;
-			width: 100%;
-			max-width: 2300px;
-            margin-left: auto;
-            margin-right: auto;
-            box-sizing: border-box;
 		}
 		.site-header h1 {
             margin: 0;
@@ -185,10 +171,6 @@
 		#list-view-container {
             width: 100%;
             background: #e0f0ff;             /* CHANGED: matching site background */
-			max-width: 2300px;
-            margin-left: auto;
-            margin-right: auto;
-            box-sizing: border-box;
 		}
 
 		.list-grid {
@@ -262,7 +244,8 @@
 			border-spacing: 0 4px;
 			padding: 0 8px 8px 8px;
 			flex: 1;
-
+			overflow-y: auto;
+			display: block;
 		}
 
 		/* CHANGED: Table headers – lighter blue */
@@ -367,7 +350,7 @@
                     </div>
 
                     <div class="control-item">
-                        <span class="sub-label">Minimum Population</span>
+                        <span class="sub-label">Min Population</span>
                         <input type="number" id="minPop" value="0" min="0" max="10000000" 
                             step="1000" placeholder="e.g. 100000"
                             oninput="handlePopChange(this)">
@@ -439,7 +422,7 @@
                     <input type="text" id="graphTitle" value="City Bike Performance: Avg Score vs Best Area">
                 </div>
                 <div class="control-item">
-                    <button class="action-btn" onclick="downloadChart()" style="margin-top: 0;">Download Full Size Image</button>
+                    <button class="action-btn" onclick="downloadChart()" style="margin-top: 0;">Download Chart Image</button>
                 </div>
             </div>
             
@@ -459,10 +442,10 @@
         const CUSTOM_COLORSCALE = [
 			[0.0, '#8b0000'], // Dark Red
             [0.2, '#d73027'], // Red
-            [0.35, '#c97d32'], // Orange
-            [0.5, '#ccba47'], // Yellow
-            [0.65, '#d9ef8b'], // Light Greenish
-            [0.875, '#91cf60'],// Green
+            [0.4, '#c97d32'], // Orange
+            [0.55, '#ccba47'], // Yellow
+            [0.7, '#d9ef8b'], // Light Greenish
+            [0.9, '#91cf60'],// Green
             [1.0, '#1a9850']  // Dark Green
         ];
 
@@ -1151,16 +1134,7 @@
 
 		// CHANGED: Trigger the default load the second the HTML is done rendering
 		window.addEventListener('DOMContentLoaded', loadDefaultData);
-		
-		// ADDED: Listens for window resizing to automatically move the legends if the screen gets too narrow
-        let layoutResizeTimer = null;
-        window.addEventListener('resize', () => {
-            clearTimeout(layoutResizeTimer);
-            layoutResizeTimer = setTimeout(() => {
-                if (rawData.length > 0) updateView();
-            }, 200);
-        });
-		
+
         function handlePopChange(el) {
             let val = parseFloat(el.value);
             if (isNaN(val)) val = 0;
@@ -1271,46 +1245,9 @@
 
         function downloadChart() {
             if (currentView === 'graph') {
-                const chartDiv = document.getElementById('chart-container');
-                // CHANGED: Find the watermark in the annotations array so we can target it
-                const annotations = chartDiv.layout.annotations || [];
-                const watermarkIndex = annotations.findIndex(a => a.text === 'bikefriendlinessindex.org');
-                
-                let relayoutUpdate = { paper_bgcolor: '#ffffff' };
-                let relayoutRevert = { paper_bgcolor: 'rgba(0,0,0,0)' };
-                
-              
-
-                Plotly.relayout('chart-container', relayoutUpdate).then(() => {
-                    return Plotly.downloadImage('chart-container', { format: 'png', width: 1280, height: 900, filename: 'bike_safety_chart' });
-                }).then(() => {
-                    Plotly.relayout('chart-container', relayoutRevert);
-                });
-                
+                Plotly.downloadImage('chart-container', { format: 'png', width: 1920, height: 960, filename: 'bike_safety_chart' });
             } else if (currentView === 'map') {
-                const mapDiv = document.getElementById('map-container');
-                const annotations = mapDiv.layout.annotations || [];
-                const watermarkIndex = annotations.findIndex(a => a.text === 'bikefriendlinessindex.org');
-                
-                let relayoutUpdate = { paper_bgcolor: '#ffffff' };
-                let relayoutRevert = { paper_bgcolor: 'rgba(0,0,0,0)' };
-                
-                // CHANGED: Do the exact same font size boost for the map download
-                if (watermarkIndex !== -1) {
-                    relayoutUpdate[`annotations[${watermarkIndex}].font.size`] = 24; 
-                    // CHANGED: Temporarily turns the watermark background to ocean blue
-                    relayoutUpdate[`annotations[${watermarkIndex}].bgcolor`] = '#ffffff'; 
-                    
-                    relayoutRevert[`annotations[${watermarkIndex}].font.size`] = 12; 
-                    // Reverts it back to the site blue
-                    relayoutRevert[`annotations[${watermarkIndex}].bgcolor`] = '#cce0ff'; 
-                }
-
-                Plotly.relayout('map-container', relayoutUpdate).then(() => {
-                    return Plotly.downloadImage('map-container', { format: 'png', width: 1920, height: 960, filename: 'bike_safety_map' });
-                }).then(() => {
-                    Plotly.relayout('map-container', relayoutRevert);
-                });
+                Plotly.downloadImage('map-container', { format: 'png', width: 1920, height: 960, filename: 'bike_safety_map' });
             } else {
                 alert("Switch to Graph or Map View to download.");
             }
@@ -1642,10 +1579,10 @@
             
             // CHANGED: Map-specific title logic
             let defaultTitle = mapLevel === 'City' 
-                ? `City "${aggMode}" Bike Friendliness Scores${focusLabel}` 
+                ? `City Scores ("${aggMode}")${focusLabel}` 
                 : (mapLevel === 'Country' 
-                    ? `Highest "${aggMode}" Bike Friendliness Score by Country${focusLabel}` 
-                    : `Highest "${aggMode}" Bike Friendliness Score By Country/Region${focusLabel}`);
+                    ? `Highest "${aggMode}" Score by Country${focusLabel}` 
+                    : `Highest "${aggMode}" Score By Country/Region${focusLabel}`);
                     
             let displayTitle = userEditedMapTitle ? customMapTitle : defaultTitle;
 
@@ -1680,21 +1617,7 @@
                 if (aggMode === 'City Wide') return d.avgScore;
                 return d.bestAreaScore;
             };
-			
-			// CHANGED: Defined the watermark annotation for the map views
-            const mapWatermark = {
-                text: 'bikefriendlinessindex.org',
-                xref: 'paper', yref: 'paper',
-                x: 0.96, y: 0.01,
-                xanchor: 'right', yanchor: 'bottom',
-                showarrow: false,
-                font: { color: 'rgba(10, 10, 10, 0.8)', size: 14, family: 'Inter, sans-serif' },
-				bgcolor: '#cce0ff', // CHANGED: Sets the initial map watermark to the site blue
-                bordercolor: 'rgba(200, 200, 200, 0.4)', // Subtle border
-                borderwidth: 1,
-                borderpad: 5 // Padding inside the box
-            };
-			
+
             data.sort((a, b) => getScore(a) - getScore(b));
             
             if (mapLevel === 'City') {
@@ -1747,7 +1670,7 @@
                         size: sizes, color: colors, 
                         colorscale: CUSTOM_COLORSCALE,
                         cmin: 0, cmax: 100, 
-                        colorbar: { title: aggMode + '<br>Score', x: 1.01, xanchor: 'left', y: 0.5, yanchor: 'middle', len: 0.8, thicknessmode: 'fraction', thickness: 0.025 },
+                        colorbar: { title: aggMode + '<br>Score', x: 0.98 },
                         line: { color: 'black', width: 0.5 }, opacity: 0.9
                     },
                     hovertemplate: 
@@ -1760,7 +1683,6 @@
                         "Focus Disp: %{customdata[3]:.1f}<extra></extra>"
                 }], {
                     title: `<b>${displayTitle}</b>`, // CHANGED: Was hardcoded to a string template
-					annotations: [mapWatermark],
 					paper_bgcolor: 'rgba(0,0,0,0)',
 					plot_bgcolor: 'rgba(0,0,0,0)',  //@@
                     uirevision: 'true',
@@ -1768,7 +1690,7 @@
                     hoverdistance: 50,      // <-- ADDED: Increases tap radius for "fat fingers"
                     dragmode: 'pan',        // <-- ADDED: Prevents accidental box-zoom hijacking
                     geo: { 
-                        domain: { x: [0, 1] },
+                        domain: { x: [0, 0.98] },
                         scope: 'world', projection: { type: 'natural earth', scale: currentMapScale },
 						bgcolor: 'rgba(0,0,0,0)',          // ← ADD THIS
                         showland: true, landcolor: 'lightgray', 
@@ -1777,7 +1699,7 @@
                         showcountries: true, countrycolor: '#888', countrywidth: 1,
                         showsubunits: true, subunitcolor: '#ccc', subunitwidth: 0.5
                     },
-                    margin: { l:0, r:75, t:50, b:20 }
+                    margin: { l:0, r:80, t:50, b:0 }
                 }, plotConfig); 
             } 
             else {
@@ -1860,7 +1782,7 @@
                         colorscale: CUSTOM_COLORSCALE,
                         zmin: 0, zmax: 100,
                         marker: { line: { color: 'rgb(255,255,255)', width: 1 } },
-                        colorbar: { title: aggMode + '<br>Score', x: 1.01, xanchor: 'left', y: 0.5, yanchor: 'middle', len: 0.8, thicknessmode: 'fraction', thickness: 0.025 },
+                        colorbar: { title: aggMode + '<br>Score', x: 0.98 },
                         hovertemplate: "<b>%{location}</b><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]:.1f}<br>Best Area: %{customdata[2]:.1f}<br>Highest Point: %{customdata[3]:.1f}<extra></extra>"
                     });
                 }
@@ -1941,7 +1863,6 @@
 
                 Plotly.react('map-container', traces, {
                     title: `<b>${displayTitle}</b>`, // CHANGED: Was hardcoded to a string template
-					annotations: [mapWatermark],
                     uirevision: 'true',
 					paper_bgcolor: 'rgba(0,0,0,0)',   // <-- ADD THIS
 					plot_bgcolor: 'rgba(0,0,0,0)',    // <-- ADD THIS
@@ -1949,7 +1870,7 @@
                     hoverdistance: 50,      // <-- ADDED: Increases tap radius for "fat fingers"
                     dragmode: 'pan',        // <-- ADDED: Prevents accidental box-zoom hijacking
                     geo: { 
-                        domain: { x: [0, 1] },
+                        domain: { x: [0, 0.98] },
                         scope: 'world', 
                         projection: { type: 'natural earth', scale: currentMapScale },
 						bgcolor: 'rgba(0,0,0,0)',
@@ -1958,7 +1879,7 @@
                         showlakes: true, lakecolor: 'lightblue'
 						
                     },
-                    margin: { l:0, r:75, t:50, b:20 }
+                    margin: { l:0, r:80, t:50, b:0 }
                 }, plotConfig); 
             }
             
@@ -1969,42 +1890,42 @@
         function attachMapLock() {
             const mapDiv = document.getElementById('map-container');
             
+            // Prevent multiple listeners from stacking
             if (mapDiv._hasRelayoutListener) return;
 
-            // CHANGED: Added a debounce timer to stop the lock from interrupting active mobile gestures
-            let lockTimeout;
-
             mapDiv.on('plotly_relayout', function(eventData) {
-                clearTimeout(lockTimeout);
-                
-                lockTimeout = setTimeout(() => {
-                    let update = {};
-                    let needsUpdate = false;
+                let update = {};
+                let needsUpdate = false;
 
-                    if (eventData['geo.projection.scale'] !== undefined) {
-                        let newScale = eventData['geo.projection.scale'];
-                        if (newScale < 1) { 
-                            update['geo.projection.scale'] = 1; 
-                            update['geo.center.lat'] = 0;
-                            needsUpdate = true; 
-                        }
-                        else if (newScale > 150) { 
-                            update['geo.projection.scale'] = 150; 
-                            needsUpdate = true; 
-                        }
-                        currentMapScale = update['geo.projection.scale'] || newScale;
+                // 1. Zoom Clamping (Between 1 and 150)
+                if (eventData['geo.projection.scale'] !== undefined) {
+                    let newScale = eventData['geo.projection.scale'];
+                    if (newScale < 1) { 
+                        update['geo.projection.scale'] = 1; 
+						// NEW: Force vertical center back to '0' to stop the jumping effect
+						update['geo.center.lat'] = 0;
+                        needsUpdate = true; 
                     }
+                    else if (newScale > 150) { 
+                        update['geo.projection.scale'] = 150; 
+                        needsUpdate = true; 
+                    }
+                    // Update our tracker even if it wasn't clamped
+                    currentMapScale = update['geo.projection.scale'] || newScale;
+                }
 
-                    if (eventData['geo.center.lat'] !== undefined && update['geo.center.lat'] === undefined) {
-                        let newLat = eventData['geo.center.lat'];
-                        if (newLat > 50) { update['geo.center.lat'] = 50; needsUpdate = true; }
-                        if (newLat < -50) { update['geo.center.lat'] = -50; needsUpdate = true; }
-                    }
+                // 2. Latitude Clamping (Reduced limits for tighter control)
+				// Only apply this if we aren't already resetting the center from the zoom check
+				if (eventData['geo.center.lat'] !== undefined && update['geo.center.lat'] === undefined) {
+					let newLat = eventData['geo.center.lat'];
+					if (newLat > 50) { update['geo.center.lat'] = 50; needsUpdate = true; }
+					if (newLat < -50) { update['geo.center.lat'] = -50; needsUpdate = true; }
+				}
 
-                    if (needsUpdate) {
-                        Plotly.relayout(mapDiv, update);
-                    }
-                }, 250); // Waits 250ms after the gesture stops to apply the boundary clamp
+                // If they hit a boundary, rigidly snap them back
+                if (needsUpdate) {
+                    Plotly.relayout(mapDiv, update);
+                }
             });
             
             mapDiv._hasRelayoutListener = true;
@@ -2087,25 +2008,11 @@
                     hovertext: regionData.map(d => d.city)
                 });
             });
-			// CHANGED: Moved watermark inside the white plot area. 
-            // x: 0.99 and y: 0.02 places it perfectly inside the bottom right corner of the grid
-            const watermark = {
-                text: 'bikefriendlinessindex.org',
-                xref: 'paper', yref: 'paper',
-                x: 0.99, y: 0.02, xanchor: 'right', yanchor: 'bottom',
-                showarrow: false,
-                font: { color: 'rgba(10, 10, 10, 0.6)', size: 14, family: 'Inter, sans-serif' },
-                bgcolor: 'rgba(255, 255, 255, 0.85)', // CHANGED: White background to cover gridlines
-                bordercolor: 'rgba(200, 200, 200, 0.4)', borderwidth: 1, borderpad: 5 
-            };
-			
-			// Push the watermark into the existing annotations array
-            annotations.push(watermark);
-			
+
             Plotly.react('chart-container', traces, {
                 title: `<b>${displayTitle}</b>`, // CHANGED: Now properly applies the title
                 xaxis: { title: "City Wide Score", range:[24,105] }, yaxis: { title: "Best Area Score", range:[24,105] },
-                template: "plotly_white", margin: { l:60, r:120, t:80, b:60 },
+                template: "plotly_white", margin: { l:60, r:40, t:80, b:60 }, height: 750,
                 uirevision: 'true', 
 				paper_bgcolor: 'rgba(0,0,0,0)',   // <-- ADD THIS
 				plot_bgcolor: '#f8f9fc',    // <-- ADD THIS
@@ -2196,12 +2103,12 @@
 	
 	<div style="padding: 25px; background-color: #cce0ff; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.04); text-align: center; max-width: 2300px; margin: 40px auto 20px auto;">
         
-        <p style="font-size: 0.9rem; color: #666; max-width: 1500px; margin: 5px auto 0 auto;">
+        <p style="font-size: 0.9rem; color: #666; max-width: 800px; margin: 5px auto 0 auto;">
             Note: this website is best viewed on computer, but there are buttons on the top right of the map/graph that assist with mobile viewing.
         </p>
         <br>
         
-        <div style="max-width: 1500px; margin: 0 auto 20px auto; text-align: left; color: #444; line-height: 1.6; font-size: 1rem;">
+        <div style="max-width: 800px; margin: 0 auto 20px auto; text-align: left; color: #444; line-height: 1.6; font-size: 1rem;">
             <h2 style="color: #333; font-size: 1.5rem; margin-bottom: 10px; margin-top: 0;">Overview: The Bike Friendliness Index</h2>
             <p style="margin-bottom: 10px;">The Bike Friendliness Index uses a data driven algorithm to evaluate the day-to-day cycling experience of communities around the world. Recognizing that existing bikeability metrics often focus only on major Western cities and restrict their analysis to arbitrary municipal borders, this program was built to measure bike friendliness as accurately as possible using only data that can be found for most communities, and correcting for blind spots found in methodologies from alternatives. By utilizing live, crowdsourced OpenStreetMap data, the algorithm calculates the extent to which a cyclist can travel, and what amenities they can realistically reach without exceeding a designated stress threshold.</p>
             <p style="margin-bottom: 15px;">This website currently features data for hundreds of cities with populations over 100,000, allowing you to explore the results through three distinct lenses: Map, Graph, and List modes. Because "bikeability" is subjective depending on why you ride and why you are comparing cities, the program generates multiple scores. This is done to cater to those who care more about infrastructure (for recreational biking), destinations (for errands and going out), and balanced. And to be able to compare a city's overall average (the traditional rating method), its best neighborhoods (good for deciding where to live), and highest point (good for comparing cities without it being biased by the differences in city borders). The result is a definitive guide to finding genuinely bike-friendly communities.</p>
@@ -2211,7 +2118,7 @@
             </p>
         </div>
 
-        <div style="text-align: left; max-width: 1500px; margin: 0 auto 30px auto; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px 20px;">
+        <div style="text-align: left; max-width: 800px; margin: 0 auto 30px auto; background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 15px 20px;">
             <details style="cursor: pointer;">
                 <summary style="font-weight: 700; color: #444; font-size: 1.15rem; outline: none; list-style-position: inside;">
                     📊 Methodology (Click to expand)
@@ -2271,7 +2178,7 @@
         </div>
 
         <h3 style="margin-top: 0; color: #444; font-size: 1.25rem;">Support the Bike Friendliness Index</h3>
-        <p style="font-size: 0.9rem; color: #555; max-width: 1500px; margin: 0 auto 15px auto; line-height: 1.5;">
+        <p style="font-size: 0.9rem; color: #555; max-width: 800px; margin: 0 auto 15px auto; line-height: 1.5;">
             Want to request a new location be added, receive a full city analysis, or just want to support the project? (Read "Want To See More?" in the methodology for more information on donations.)
         </p>
         <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
