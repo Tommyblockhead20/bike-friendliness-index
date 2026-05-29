@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>The Bike Friendliness Index</title>  <!-- mobile improvements-->
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <title>The Bike Friendliness Index</title>  <!-- mobile optimizations-->
+    <script src="https://cdn.plot.ly/plotly-3.5.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
@@ -39,294 +39,338 @@
         padding: 5px 0; /* Removed wasted right padding to give filters more room */
       }
 
-	/* Mobile Layout: under 820px */
-		@media (max-width: 819px) {
-		  body {
-			padding: 6px;
-		  }
+	/* Mobile Layout: under 840px */
+	@media (max-width: 839px) {
+	  body {
+		padding: 6px;
+	  }
 
-		  .site-header {
-			padding: 9px 12px;
-			margin-bottom: 7px;
-			border-radius: 12px;
-		  }
+	  .site-header {
+		padding: 9px 12px;
+		margin-bottom: 7px;
+		border-radius: 12px;
+	  }
 
-		  .site-header h1 {
-			font-size: 14px;
-		  }
+	  .site-header h1 {
+		font-size: 14px;
+	  }
 
-		  .controls {
-			padding: 7px;
-			margin-bottom: 7px;
-			border-radius: 12px;
-			font-size: 10px;
-		  }
+	  .controls {
+		padding: 7px;
+		margin-bottom: 7px;
+		border-radius: 12px;
+		font-size: 10px;
+	  }
 
-		  .controls-grid {
-			display: grid;
-			grid-template-columns: minmax(105px, 0.9fr) minmax(185px, 1.45fr) minmax(105px, 0.9fr);
-			gap: 8px 10px;
-			align-items: start;
-		  }
+	  .controls-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+		grid-template-areas:
+		  "mode view export"
+		  "filters filters filters";
+		gap: 8px;
+		align-items: start;
+	  }
 
-		  .sec-mode,
-		  .sec-filters,
-		  .sec-view,
-		  .sec-accessibility,
-		  .sec-export {
-			min-width: 0;
-			box-sizing: border-box;
-		  }
+	  .sec-mode,
+	  .sec-filters,
+	  .sec-view,
+	  .sec-export {
+		min-width: 0;
+		box-sizing: border-box;
+	  }
 
-		  .sec-mode {
-			grid-column: 1 / 2;
-			grid-row: 1;
-			border-left: none;
-			padding-left: 0;
-		  }
+	  .sec-mode {
+		grid-area: mode;
+		border-left: none;
+		padding-left: 0;
+	  }
 
-		  .sec-accessibility {
-			grid-column: 1 / 2;
-			grid-row: 2;
-			border-left: none;
-			border-top: 3px solid #e0e0e0;
-			padding-left: 0 !important;
-			padding-top: 7px;
-		  }
+	  .sec-view {
+		grid-area: view;
+		border-left: 3px solid #e0e0e0;
+		padding-left: 7px !important;
+	  }
 
-		  .sec-filters {
-			grid-column: 2 / 3;
-			grid-row: 1 / 3;
-			border-left: 3px solid #e0e0e0;
-			padding-left: 7px;
-		  }
+	  .sec-export {
+		grid-area: export;
+		border-left: 3px solid #e0e0e0;
+		border-top: none;
+		padding-left: 7px !important;
+		padding-top: 0;
+	  }
 
-		  .sec-view {
-			grid-column: 3 / 4;
-			grid-row: 1;
-			border-left: 3px solid #e0e0e0;
-			padding-left: 7px !important;
-		  }
+	  .sec-filters {
+		grid-area: filters;
+		border-left: none;
+		border-top: 3px solid #e0e0e0;
+		padding-left: 0;
+		padding-top: 8px;
+	  }
 
-		  .sec-export {
-			grid-column: 3 / 4;
-			grid-row: 2;
-			border-left: 3px solid #e0e0e0;
-			border-top: 3px solid #e0e0e0;
-			padding-left: 7px !important;
-			padding-top: 7px;
-		  }
+	  .section-group {
+		gap: 3px;
+		padding: 2px 0;
+	  }
 
-		  .section-group {
-			gap: 3px;
-			padding: 2px 0;
-		  }
+	  .sec-filters .section-group > div:first-child,
+	  .sec-view .section-group > div:first-child {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 10px;
+		min-width: 0;
+	  }
 
-		  .sec-filters .section-group > div:first-child,
-		  .sec-view .section-group > div:first-child {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 8px 10px;
-			min-width: 0;
-		  }
+	  .control-item,
+	  .btn-group,
+	  .action-btn,
+	  .sec-export input[type="text"] {
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+	  }
 
-		  .control-item,
-		  .btn-group,
-		  .action-btn,
-		  .sec-export input[type="text"] {
-			min-width: 0;
-			max-width: 100%;
-			box-sizing: border-box;
-		  }
+	  .control-item {
+		gap: 3px;
+	  }
 
-		  .control-item {
-			gap: 3px;
-		  }
+	  /* Section headers: Choose Mode, Global Filters, View Settings, etc. */
+	  .controls-grid summary label,
+	  .controls-grid > .section-group > .control-item > label {
+		font-size: 11px !important;
+		line-height: 1.15;
+		margin-bottom: 2px;
+	  }
 
-		  /* Section headers: Choose Mode, Global Filters, View Settings, etc. */
-		  .controls-grid summary label,
-		  .controls-grid > .section-group > .control-item > label {
-			font-size: 11px !important;
-			line-height: 1.15;
-			margin-bottom: 2px;
-		  }
+	  /* Small labels: Focus, Minimum Population, Map Level, etc. */
+	  .controls-grid .sub-label {
+		font-size: 10px !important;
+		line-height: 1.1;
+		height: auto;
+	  }
 
-		  /* Small labels: Focus, Minimum Population, Map Level, etc. */
-		  .controls-grid .sub-label {
-			font-size: 10px !important;
-			line-height: 1.1;
-			height: auto;
-		  }
+	  #cityCountDisplay {
+		font-size: 9px !important;
+		line-height: 1.1;
+		padding: 0 4px !important;
+		margin-left: 4px !important;
+		border-radius: 20px;
+	  }
 
-		  #cityCountDisplay {
-			font-size: 9px !important;
-			line-height: 1.1;
-			padding: 0 4px !important;
-			margin-left: 4px !important;
-			border-radius: 20px;
-		  }
+	  #tryTheseText {
+		font-size: 9px !important;
+		line-height: 1.1;
+		margin-left: 3px !important;
+	  }
 
-		  #tryTheseText {
-			font-size: 9px !important;
-			line-height: 1.1;
-			margin-left: 3px !important;
-		  }
+	  input[type="text"],
+	  input[type="number"],
+	  select {
+		font-size: 10px !important;
+		line-height: 1.1;
+		padding: 2px 4px;
+		height: 21px;
+	  }
 
-		  input[type="text"],
-		  input[type="number"],
-		  select {
-			font-size: 10px !important;
-			line-height: 1.1;
-			padding: 2px 4px;
-			height: 21px;
-		  }
+	  input[type="number"] {
+		width: 48px;
+	  }
 
-		  input[type="number"] {
-			width: 48px;
-		  }
+	  /* Fix the weird tall Minimum Population / Minimum Score boxes */
+	  #minPop,
+	  #minScore {
+		height: 22px !important;
+		min-height: 22px !important;
+		max-height: 22px !important;
+		line-height: 1 !important;
+		padding: 1px 4px !important;
+		box-sizing: border-box;
+		align-self: flex-start;
+	  }
 
-		  select {
-			width: 64px;
-		  }
+	  /* Add room for one more digit */
+	  #minPop {
+		width: 70px !important;
+	  }
 
-		  input[type="range"] {
-			width: 95px;
-		  }
+	  /* Keep Minimum Score narrower */
+	  #minScore {
+		width: 42px !important;
+	  }
 
-		  button,
-		  .btn-group button {
-			font-size: 10px !important;
-			line-height: 1.1;
-			min-height: 21px;
-			padding: 3px 5px;
-		  }
+	  /* Make placeholder/example text fit on small screens */
+	  #minPop::placeholder,
+	  #minScore::placeholder {
+		font-size: 7px;
+		opacity: 0.75;
+	  }
 
-		  .btn-group {
-			flex-wrap: wrap;
-			gap: 1px;
-		  }
+	  select {
+		width: 64px;
+	  }
 
-		  .btn-group button,
-		  .btn-group button:first-child,
-		  .btn-group button:last-child,
-		  .btn-group button:not(:first-child):not(:last-child) {
-			border-radius: 6px;
-			border-left: 1px solid #ced4da;
-		  }
+	  input[type="range"] {
+		width: 95px;
+	  }
 
-		  .action-btn {
-			font-size: 10px !important;
-			line-height: 1.1;
-			min-height: 22px;
-			padding: 4px 6px;
-			margin-top: 2px;
-		  }
+	  button,
+	  .btn-group button {
+		font-size: 10px !important;
+		line-height: 1.1;
+		min-height: 21px;
+		padding: 3px 5px;
+	  }
 
-		  .mode-toggle-btn,
-		  #settingsToggleBtn {
-			width: 100%;
-		  }
+	  .btn-group {
+		flex-wrap: wrap;
+		gap: 1px;
+	  }
 
-		  .checkbox-wrapper {
-			height: 21px;
-			gap: 4px;
-		  }
+	  .btn-group button,
+	  .btn-group button:first-child,
+	  .btn-group button:last-child,
+	  .btn-group button:not(:first-child):not(:last-child) {
+		border-radius: 6px;
+		border-left: 1px solid #ced4da;
+	  }
 
-		  .checkbox-wrapper input {
-			width: 13px;
-			height: 13px;
-		  }
+	  .action-btn {
+		font-size: 10px !important;
+		line-height: 1.1;
+		min-height: 22px;
+		padding: 4px 6px;
+		margin-top: 2px;
+	  }
 
-		  #graphTitle,
-		  .sec-export input[type="text"] {
-			font-size: 10px !important;
-			line-height: 1.1;
-			height: 21px;
-			width: 100%;
-			max-width: 100%;
-			box-sizing: border-box;
-		  }
+	  .mode-toggle-btn,
+	  #settingsToggleBtn {
+		width: 100%;
+	  }
 
-		  .sec-export .action-btn {
-			width: 100%;
-			white-space: normal;
-			line-height: 1.15;
-		  }
+	  .checkbox-wrapper {
+		height: 21px;
+		gap: 4px;
+	  }
 
-		  #chart-container,
-		  #map-container {
-			aspect-ratio: 1.2 / 1;
-			max-height: none;
-			min-height: 390px;
-			height: auto;
-			padding: 6px;
-			border-radius: 12px;
-		  }
+	  .checkbox-wrapper input {
+		width: 13px;
+		height: 13px;
+	  }
 
-		  #map-container .gtitle,
-		  #chart-container .gtitle {
-			font-size: 10px !important;
-		  }
+	  #graphTitle,
+	  .sec-export input[type="text"] {
+		font-size: 10px !important;
+		line-height: 1.1;
+		height: 21px;
+		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
+	  }
 
-		  #map-container .cbtitle,
-		  #chart-container .cbtitle {
-			font-size: 8px !important;
-		  }
+	  .sec-export .action-btn {
+		width: 100%;
+		white-space: normal;
+		line-height: 1.15;
+	  }
 
-		  .list-grid {
-			grid-template-columns: 1fr;
-			gap: 10px;
-		  }
+	  #chart-container,
+	  #map-container {
+		aspect-ratio: 1.2 / 1;
+		max-height: none;
+		min-height: 390px;
+		height: auto;
+		padding: 6px;
+		border-radius: 12px;
+	  }
 
-		  .list-card {
-			max-height: none;
-		  }
+	  #map-container .gtitle,
+	  #chart-container .gtitle {
+		font-size: 10px !important;
+	  }
 
-		  .list-card h3 {
-			padding: 10px 10px 8px 10px;
-			font-size: 0.9rem;
-		  }
+	  #map-container .cbtitle,
+	  #chart-container .cbtitle {
+		font-size: 8px !important;
+	  }
 
-		  table.ranking-table {
-			font-size: 0.78rem;
-			padding: 0 5px 5px 5px;
-		  }
+	  .list-grid {
+		grid-template-columns: 1fr;
+		gap: 10px;
+	  }
 
-		  table.ranking-table th,
-		  table.ranking-table td {
-			padding: 5px 6px;
-		  }
+	  .list-card {
+		max-height: none;
+	  }
 
-		  .mobile-computer-note {
-			display: block;
-		  }
-		}
-		
-		.mobile-help-tooltip {
-		  position: fixed;
-		  z-index: 99999;
-		  max-width: min(320px, calc(100vw - 24px));
-		  padding: 8px 10px;
-		  border-radius: 10px;
-		  background: #0f172a;
-		  color: white;
-		  font-size: 12px;
-		  line-height: 1.3;
-		  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-		  pointer-events: none;
-		  opacity: 0;
-		  transform: translateY(4px);
-		  transition:
-			opacity 0.12s ease,
-			transform 0.12s ease;
-		}
+	  .list-card h3 {
+		padding: 10px 10px 8px 10px;
+		font-size: 0.9rem;
+	  }
 
-		.mobile-help-tooltip.visible {
-		  opacity: 1;
-		  transform: translateY(0);
-		}
+	  table.ranking-table {
+		font-size: 0.78rem;
+		padding: 0 5px 5px 5px;
+	  }
 
-     @media (min-width: 820px) and (max-width: 939px) {
+	  table.ranking-table th,
+	  table.ranking-table td {
+		padding: 5px 6px;
+	  }
+
+	}
+	
+	@media (max-width: 839px) {
+	  .bottom-info-section {
+		padding: 14px !important;
+		margin: 24px auto 14px auto !important;
+	  }
+
+	  .overview-text,
+	  .methodology-text {
+		font-size: 0.82rem !important;
+		line-height: 1.35 !important;
+	  }
+
+	  .overview-text h2 {
+		font-size: 1.05rem !important;
+		line-height: 1.2 !important;
+	  }
+
+	  .methodology-box {
+		padding: 12px 14px !important;
+	  }
+
+	  .methodology-box summary {
+		font-size: 0.95rem !important;
+		line-height: 1.25 !important;
+	  }
+
+	  .methodology-text {
+		padding-left: 10px !important;
+	  }
+
+	  .methodology-text h3 {
+		font-size: 0.98rem !important;
+		line-height: 1.25 !important;
+	  }
+
+	  .overview-text p,
+	  .methodology-text p,
+	  .methodology-text li {
+		font-size: 0.82rem !important;
+		line-height: 1.35 !important;
+	  }
+
+	  .overview-text p[style*="padding"] {
+		padding: 10px !important;
+	  }
+
+	  .methodology-text ul {
+		padding-left: 18px !important;
+	  }
+	}
+
+     @media (min-width: 840px) and (max-width: 964px) {
 		  body {
 			padding: 10px;
 		  }
@@ -346,7 +390,6 @@
 		  .sec-mode,
 		  .sec-filters,
 		  .sec-view,
-		  .sec-accessibility,
 		  .sec-export {
 			min-width: 0;
 			box-sizing: border-box;
@@ -359,14 +402,6 @@
 			padding-left: 0;
 		  }
 
-		  .sec-accessibility {
-			grid-column: 1 / 2;
-			grid-row: 2;
-			border-left: none;
-			border-top: 3px solid #e0e0e0;
-			padding-left: 0;
-			padding-top: 8px;
-		  }
 
 		  .sec-filters {
 			grid-column: 2 / 3;
@@ -504,7 +539,7 @@
 		}
 
       /* Compact Desktop Layout: 1000px through 1384px */
-		@media (min-width: 940px) and (max-width: 1384px) {
+		@media (min-width: 965px) and (max-width: 1409px) {
 		  body {
 			padding: 12px;
 		  }
@@ -537,12 +572,6 @@
 			.sec-view {
 			  flex: 0 1 185px;
 			  min-width: 165px;
-			  border-left: 3px solid #e0e0e0;
-			  padding-left: 8px;
-			}
-
-			.sec-accessibility {
-			  flex: 0 0 82px;
 			  border-left: 3px solid #e0e0e0;
 			  padding-left: 8px;
 			}
@@ -672,7 +701,7 @@
 		}
 
       /* Wide Layout: 1385px+ */
-      @media (min-width: 1385px) {
+      @media (min-width: 1410px) {
         .controls-grid {
           display: flex;
           flex-wrap: nowrap;
@@ -684,7 +713,6 @@
         .sec-mode,
         .sec-filters,
         .sec-view,
-        .sec-accessibility,
         .sec-export {
           grid-column: auto;
           grid-row: auto;
@@ -709,12 +737,7 @@
           padding-left: 15px;
         }
 
-        .sec-accessibility {
-          flex: 0 0 auto;
-          border-left: 3px solid #e0e0e0;
-          padding-left: 15px;
-        }
-
+   
         .sec-export {
           flex: 0 0 auto;
           border-left: 3px solid #e0e0e0;
@@ -744,7 +767,6 @@
       /* Hide full settings sections, including headers. */
       .controls-grid.settings-hidden .sec-filters,
       .controls-grid.settings-hidden .sec-view,
-      .controls-grid.settings-hidden .sec-accessibility,
       .controls-grid.settings-hidden .sec-export {
         display: none !important;
       }
@@ -1091,17 +1113,71 @@
         background: #80b0ff;
         border-radius: 10px;
       }
-	  
-	  .mobile-computer-note {
-		  display: none;
-		  font-size: 0.75rem;
-		  color: #666;
-		  max-width: 1500px;
-		  margin: 5px auto 8px auto;
-		  line-height: 1.25;
-		}
 
+      .narrow-screen-note {
+        display: none;
+        max-width: 2300px;
+        margin: -12px auto 10px auto;
+        padding: 8px 12px;
+        background: #fff7d6;
+        border: 1px solid #f0d47a;
+        border-radius: 10px;
+        color: #5c4600;
+        font-size: 0.78rem;
+        line-height: 1.3;
+        box-sizing: border-box;
+      }
 
+      .map-legend-note {
+        max-width: 2300px;
+        margin: 8px auto 14px auto;
+        padding: 8px 12px;
+        background: #cce0ff;
+        border-radius: 10px;
+        color: #334155;
+        font-size: 0.82rem;
+        line-height: 1.35;
+        box-sizing: border-box;
+      }
+
+      /* Hide the map legend when the map itself is hidden. */
+      #map-container.hidden + .map-legend-note {
+        display: none;
+      }
+
+      @media (max-width: 599px) {
+        .narrow-screen-note {
+          display: block;
+        }
+      }
+
+      @media (max-width: 839px) {
+        #more-info-box {
+          padding: 12px 14px !important;
+          font-size: 0.78rem !important;
+          line-height: 1.35 !important;
+        }
+
+        #more-info-box h3 {
+          font-size: 0.95rem !important;
+          line-height: 1.2 !important;
+        }
+
+        #more-info-box p,
+        #more-info-box li {
+          font-size: 0.78rem !important;
+          line-height: 1.35 !important;
+        }
+
+        #more-info-box ul {
+          padding-left: 18px !important;
+        }
+
+        .map-legend-note {
+          font-size: 0.75rem;
+          padding: 7px 9px;
+        }
+      }
 
       .hidden {
         display: none !important;
@@ -1125,6 +1201,10 @@
       <span style="font-size: 1.8rem"></span>
       <h1>The Bike Friendliness Index</h1>
     </div>
+
+    <p class="narrow-screen-note">
+      This page is easier to use with a wider screen. Rotate your device or make the browser window wider for the best map and controls experience.
+    </p>
 
     <div class="controls">
       <div class="controls-grid">
@@ -1359,21 +1439,12 @@
           </div>
         </details>
 
-        <details class="sec-accessibility" id="access-section" open>
-          <summary><label>Accessibility</label></summary>
-          <div class="section-group">
-            <div class="control-item" id="colorblind-control">
-              <span class="sub-label">Colorblind<br />Mode</span>
-              <div class="checkbox-wrapper">
-                <input
-                  type="checkbox"
-                  id="colorblindMode"
-                  onchange="updateView()"
-                />
-              </div>
-            </div>
-          </div>
-        </details>
+        <input
+		  type="checkbox"
+		  id="colorblindMode"
+		  onchange="updateView()"
+		  style="display: none"
+		/>
 
         <details class="sec-export" id="title-section" open>
           <summary><label>Name & Export</label></summary>
@@ -1401,6 +1472,12 @@
 
     <div id="chart-container" class="hidden"></div>
     <div id="map-container"></div>
+
+    <div id="map-legend-note" class="map-legend-note">
+      <strong>Map notes:</strong>
+      <strong>(subdivision)</strong> = larger region that was run because the city boundary was missing.
+      <strong>*</strong> = city.
+    </div>
 
     <div id="list-view-container">
       <div class="list-grid" id="listGrid"></div>
@@ -1447,11 +1524,11 @@
 		  if (currentView === "map") {
 			userEditedMapTitle = true;
 			customMapTitle = newText;
-			safeRelayout("map-container", { title: newText });
+			safeRelayout("map-container", { "title.text": `<b>${newText}</b>` });
 		  } else if (currentView === "graph") {
 			userEditedGraphTitle = true;
 			customGraphTitle = newText;
-			safeRelayout("chart-container", { title: newText });
+			safeRelayout("chart-container", { "title.text": `<b>${newText}</b>` });
 		  }
 		});
       document
@@ -1662,7 +1739,6 @@
         return [
           document.querySelector(".sec-filters"),
           document.querySelector(".sec-view"),
-          document.querySelector(".sec-accessibility"),
           document.querySelector(".sec-export"),
         ].filter(Boolean);
       }
@@ -1886,8 +1962,19 @@
             (a) => a.text === "bikefriendlinessindex.org",
           );
 
-          let relayoutUpdate = { paper_bgcolor: "#ffffff" };
-          let relayoutRevert = { paper_bgcolor: "rgba(0,0,0,0)" };
+          let relayoutUpdate = {
+            paper_bgcolor: "#ffffff",
+          };
+
+          let relayoutRevert = {
+            paper_bgcolor: "rgba(0,0,0,0)",
+          };
+
+          // Hide the colorblind Plotly button during export.
+          if (chartDiv.layout?.updatemenus?.length) {
+            relayoutUpdate["updatemenus[0].visible"] = false;
+            relayoutRevert["updatemenus[0].visible"] = true;
+          }
 
           Plotly.relayout("chart-container", relayoutUpdate)
             .then(() => {
@@ -1908,8 +1995,19 @@
             (a) => a.text === "bikefriendlinessindex.org",
           );
 
-          let relayoutUpdate = { paper_bgcolor: "#ffffff" };
-          let relayoutRevert = { paper_bgcolor: "rgba(0,0,0,0)" };
+          let relayoutUpdate = {
+            paper_bgcolor: "#ffffff",
+          };
+
+          let relayoutRevert = {
+            paper_bgcolor: "rgba(0,0,0,0)",
+          };
+
+          // Hide the colorblind Plotly button during export.
+          if (mapDiv.layout?.updatemenus?.length) {
+            relayoutUpdate["updatemenus[0].visible"] = false;
+            relayoutRevert["updatemenus[0].visible"] = true;
+          }
 
           if (watermarkIndex !== -1) {
             relayoutUpdate[`annotations[${watermarkIndex}].font.size`] = 24;
@@ -3281,7 +3379,12 @@
 		  scrollZoom: !isPhone,
 		  displaylogo: false,
 		  displayModeBar: "hover",
-		  modeBarButtonsToRemove: ["lasso2d", "select2d"],
+		  modeBarButtonsToRemove: [
+		    "lasso2d",
+		    "select2d",
+		    "pan2d",
+		    "toImage",
+		  ],
 		};
 
         const getScore = (d) => {
@@ -3387,7 +3490,7 @@
                   cmin: 0,
                   cmax: 100,
                   colorbar: {
-                    title: aggMode + "<br>Score",
+                    title: { text: aggMode + "<br>Score" },
                     x: 1.01,
                     xanchor: "left",
                     y: 0.5,
@@ -3410,7 +3513,7 @@
               },
             ],
             {
-              title: `<b>${displayTitle}</b>`,
+              title: { text: `<b>${displayTitle}</b>` },
               annotations: [mapWatermark],
               paper_bgcolor: "rgba(0,0,0,0)",
               plot_bgcolor: "rgba(0,0,0,0)",
@@ -3437,9 +3540,12 @@
                 subunitwidth: 0.5,
               },
               margin: { l: 0, r: 75, t: 50, b: 20 },
+			  updatemenus: getColorblindUpdatemenu("map"),
             },
             plotConfig,
-          );
+		).then(() => {
+		  attachColorblindPlotlyButton("map-container");
+		});
         } else {
           const worldAgg = {};
           const usAgg = {};
@@ -3586,9 +3692,9 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               colorbar: {
-                title: aggMode + "<br>Score",
+                title: { text: aggMode + "<br>Score" },
                 x: 1.01,
                 xanchor: "left",
                 y: 0.5,
@@ -3604,28 +3710,33 @@
 
           if (mapLevel === "State" && Object.keys(usAgg).length > 0) {
             const usLocs = Object.keys(usAgg);
-            traces.push({
-              type: "choropleth",
-              locationmode: "USA-states",
-              locations: usLocs,
-              z: usLocs.map((k) => usAgg[k].score),
-              customdata: usLocs.map((k) => {
-                let accText = usAgg[k].isLowAcc
-                  ? "<br><i>[Lower Accuracy Data]</i>"
-                  : "";
-                return [
-                  usAgg[k].bestCity,
-                  usAgg[k].bestCityScore,
-                  usAgg[k].bestAreaScore,
-                  usAgg[k].highestPoint,
-                  accText,
-                ];
-              }),
+             traces.push({
+				type: "choropleth",
+
+				// Changed from Plotly's built-in USA-states mode to your own fixed GeoJSON.
+				locationmode: "geojson-id",
+				geojson: "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/US_States_3.geojson",
+				featureidkey: "properties.postal",
+
+				locations: usLocs,
+				z: usLocs.map((k) => usAgg[k].score),
+				customdata: usLocs.map((k) => {
+				  let accText = usAgg[k].isLowAcc
+					? "<br><i>[Lower Accuracy Data]</i>"
+					: "";
+				  return [
+					usAgg[k].bestCity,
+					usAgg[k].bestCityScore,
+					usAgg[k].bestAreaScore,
+					usAgg[k].highestPoint,
+					accText,
+				  ];
+				}),
               text: usLocs.map((k) => getFullLocationDisplay(k)),
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3638,7 +3749,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/canada.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Canada_Boundaries_3.geojson",
               locations: canLocs,
               featureidkey: "properties.name",
               z: canLocs.map((k) => canAgg[k].score),
@@ -3658,7 +3769,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3671,7 +3782,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/rowanhogan/australian-states/master/states.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Australia_Boundaries_3.geojson",
               locations: ausLocs,
               featureidkey: "properties.STATE_NAME",
               z: ausLocs.map((k) => ausAgg[k].score),
@@ -3691,7 +3802,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3704,7 +3815,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/brazil-states.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Brazil_Boundaries_3.geojson",
               locations: locs.map((k) => {
                 if (k === "Santa Catarina") return "SC";
                 if (k === "Pernambuco") return "PE";
@@ -3733,7 +3844,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3746,7 +3857,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/mexico.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Mexico_Boundaries_3.geojson",
               locations: locs,
               featureidkey: "properties.name",
               z: locs.map((k) => mexAgg[k].score),
@@ -3766,7 +3877,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3779,7 +3890,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/codeforamerica/click_that_hood/master/public/data/germany.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Germany_Boundaries_3.geojson",
               locations: locs,
               featureidkey: "properties.name",
               z: locs.map((k) => gerAgg[k].score),
@@ -3799,7 +3910,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3812,7 +3923,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/regions.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/France_Boundaries_3.geojson",
               locations: locs,
               featureidkey: "properties.nom",
               z: locs.map((k) => fraAgg[k].score),
@@ -3832,7 +3943,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3845,7 +3956,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/openpolis/geojson-italy/master/geojson/limits_IT_regions.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Italy_Boundaries_3.geojson",
               locations: locs,
               featureidkey: "properties.reg_name",
               z: locs.map((k) => itaAgg[k].score),
@@ -3865,7 +3976,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3878,7 +3989,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/UK_Boundaries.geojson",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/UK_Boundaries.geojson",
               locations: locs,
               featureidkey: "properties.ITL121NM",
               z: locs.map((k) => ukAgg[k].score),
@@ -3898,7 +4009,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3911,7 +4022,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/longwosion/geojson-map-china/master/china.json",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/China_Boundaries_3.geojson",
               locations: locs,
               featureidkey: "properties.name",
               z: locs.map((k) => chnAgg[k].score),
@@ -3931,7 +4042,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3944,7 +4055,7 @@
               type: "choropleth",
               locationmode: "geojson-id",
               geojson:
-                "https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json",
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/World_Boundaries_3.geojson",
               locations: edgeLocs,
               featureidkey: "properties.name",
               z: edgeLocs.map((k) => edgeAgg[k].score),
@@ -3964,7 +4075,7 @@
               colorscale: activeColorScale,
               zmin: 0,
               zmax: 100,
-              marker: { line: { color: "rgb(255,255,255)", width: 1 } },
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
               showscale: false,
               hovertemplate:
                 "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
@@ -3975,7 +4086,7 @@
             "map-container",
             traces,
             {
-              title: `<b>${displayTitle}</b>`,
+              title: { text: `<b>${displayTitle}</b>` },
               annotations: [mapWatermark],
               uirevision: "true",
               paper_bgcolor: "rgba(0,0,0,0)",
@@ -3996,9 +4107,12 @@
                 lakecolor: "lightblue",
               },
               margin: { l: 0, r: 75, t: 50, b: 20 },
-            },
-            plotConfig,
-          );
+              updatemenus: getColorblindUpdatemenu("map"),
+		  },
+		  plotConfig,
+		).then(() => {
+		  attachColorblindPlotlyButton("map-container");
+		});
         }
 
         attachMapLock();
@@ -4320,6 +4434,97 @@
 		  });
 		}
 		
+		function getColorblindButtonLabel() {
+		  const isOn = document.getElementById("colorblindMode")?.checked;
+
+		  // Plotly updatemenu multiline labels are left-biased.
+		  // The nbsp padding is the simple, non-cursed way to visually center "Mode".
+		  const modePadding = isOn
+			? "&nbsp;&nbsp;&nbsp;&nbsp;"
+			: "&nbsp;&nbsp;&nbsp;";
+
+		  return isOn
+			? `✓ Colorblind<br>${modePadding}Mode`
+			: `Colorblind<br>${modePadding}Mode`;
+		}
+
+		function getColorblindUpdatemenu(viewType) {
+		  const isMap = viewType === "map";
+
+		  return [
+			{
+			  type: "buttons",
+			  direction: "left",
+
+			  // Graph needs more x because its colorbar is farther right.
+			  // Map usually needs less x because its right margin is tighter.
+			  x: isMap ? 1.035 : 1.075,
+			  xanchor: "center",
+
+			  // Under the colorbar.
+			  y: isMap ? 0.06 : 0.08,
+			  yanchor: "middle",
+
+			  showactive: false,
+			  active: -1,
+
+			  bgcolor: "rgba(255, 255, 255, 0.95)",
+			  bordercolor: "#80b0ff",
+			  borderwidth: 1,
+			  pad: { t: 2, r: 5, b: 2, l: 5 },
+			  font: { size: 10 },
+
+			  buttons: [
+				{
+				  name: "toggleColorblindMode",
+				  label: getColorblindButtonLabel(),
+				  method: "relayout",
+				  args: [{}],
+				  execute: false,
+				},
+			  ],
+			},
+		  ];
+		}
+
+		function attachColorblindPlotlyButton(plotId) {
+		  const plotDiv = document.getElementById(plotId);
+		  if (!plotDiv || !plotDiv.on) return;
+
+		  // Prevent duplicate click listeners every redraw.
+		  if (plotDiv.dataset.colorblindButtonAttached === "true") return;
+		  plotDiv.dataset.colorblindButtonAttached = "true";
+
+		  plotDiv.on("plotly_buttonclicked", (eventData) => {
+			if (eventData?.button?.name !== "toggleColorblindMode") return;
+
+			const checkbox = document.getElementById("colorblindMode");
+			if (!checkbox) return;
+
+			checkbox.checked = !checkbox.checked;
+			updateView();
+		  });
+		}
+		
+		function attachGraphColorblindButton() {
+		  const chartDiv = document.getElementById("chart-container");
+		  if (!chartDiv || !chartDiv.on) return;
+
+		  // Prevent stacking duplicate listeners every time updateView() redraws.
+		  if (chartDiv.dataset.colorblindButtonAttached === "true") return;
+		  chartDiv.dataset.colorblindButtonAttached = "true";
+
+		  chartDiv.on("plotly_buttonclicked", (eventData) => {
+			if (eventData?.button?.name !== "toggleColorblindMode") return;
+
+			const checkbox = document.getElementById("colorblindMode");
+			if (!checkbox) return;
+
+			checkbox.checked = !checkbox.checked;
+			updateView();
+		  });
+		}
+
 		function getGraphWatermarkAnnotation() {
 		  return {
 			text: "bikefriendlinessindex.org",
@@ -4495,9 +4700,9 @@
           "chart-container",
           traces,
           {
-            title: `<b>${displayTitle}</b>`,
-            xaxis: { title: "City Wide Score", range: [24, 105] },
-            yaxis: { title: "Best Area Score", range: [24, 105] },
+            title: { text: `<b>${displayTitle}</b>` },
+            xaxis: { title: { text: "City Wide Score" }, range: [24, 105] },
+            yaxis: { title: { text: "Best Area Score" }, range: [24, 105] },
             template: "plotly_white",
             margin: { l: 60, r: 120, t: 80, b: 60 },
             uirevision: "true",
@@ -4513,6 +4718,7 @@
               x: 0.5,
               xanchor: "center",
             },
+			updatemenus: getColorblindUpdatemenu("graph"),
             annotations: annotations,
           },
           {
@@ -4523,9 +4729,12 @@
               "select2d",
               "autoScale2d",
               "toggleSpikelines",
+              "pan2d",
+              "toImage",
             ],
           },
         ).then(() => {
+		  attachColorblindPlotlyButton("chart-container");
           attachGraphRelayoutLabelUpdater(allData);
         });
       }
@@ -4718,6 +4927,7 @@
     </script>
 
     <div
+	  class="bottom-info-section"
       style="
         padding: 25px;
         background-color: #cce0ff;
@@ -4728,12 +4938,9 @@
         margin: 40px auto 20px auto;
       "
     >
-      <p class="mobile-computer-note">
-	  Note: this website is easier to view on computer. Long press setting buttons for full information. There are also buttons to the right of the map/graph titles to assist with mobile viewing.
-	</p>
-
       <div
-        style="
+        class="overview-text"
+		style="
           max-width: 1500px;
           margin: 0 auto 20px auto;
           text-align: left;
@@ -4785,6 +4992,7 @@
       </div>
 
       <div
+	    class="methodology-box"
         style="
           text-align: left;
           max-width: 1500px;
@@ -4809,6 +5017,7 @@
           </summary>
 
           <div
+		    class="methodology-text"
             style="
               margin-top: 15px;
               font-size: 1rem;
@@ -4931,6 +5140,7 @@
       </div>
 
             <div
+        id="more-info-box"
         style="
           text-align: left;
           max-width: 1500px;
