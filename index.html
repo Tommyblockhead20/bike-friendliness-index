@@ -1128,6 +1128,5217 @@
         box-sizing: border-box;
       }
 
+      @media (max-width: 599px) {
+        .narrow-screen-note {
+          display: block;
+        }
+      }
+
+      @media (max-width: 839px) {
+        #more-info-box {
+          padding: 12px 14px !important;
+          font-size: 0.78rem !important;
+          line-height: 1.35 !important;
+        }
+
+        #more-info-box h3 {
+          font-size: 0.95rem !important;
+          line-height: 1.2 !important;
+        }
+
+        #more-info-box p,
+        #more-info-box li {
+          font-size: 0.78rem !important;
+          line-height: 1.35 !important;
+        }
+
+        #more-info-box ul {
+          padding-left: 18px !important;
+        }      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=G-PK6XW2B82B"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag("js", new Date());
+      gtag("config", "G-PK6XW2B82B", { anonymize_ip: true });
+    </script>
+  </head>
+  <body>
+    <div class="site-header">
+      <span style="font-size: 1.8rem"></span>
+      <h1>The Bike Friendliness Index</h1>
+    </div>
+
+    <p class="narrow-screen-note">
+      This page is easier to use with a wider screen. Rotate your device or make the browser window wider for the best map and controls experience.
+    </p>
+
+    <div class="controls">
+      <div class="controls-grid">
+        <div class="section-group sec-mode">
+          <div class="control-item" style="display: none">
+            <label>Data Source</label>
+            <input type="file" id="csvFile" accept=".csv" />
+          </div>
+          <div class="control-item">
+            <label>Choose Mode</label>
+            <button
+              class="action-btn mode-toggle-btn"
+              id="viewToggleBtn"
+              onclick="cycleView()"
+              style="margin-top: 0"
+            >
+              Switch to Graph View
+            </button>
+          </div>
+          <div class="control-item">
+            <button
+              class="action-btn"
+              id="settingsToggleBtn"
+              onclick="toggleAllSettings(event)"
+              style="margin-top: 0"
+            >
+              Hide Settings
+            </button>
+          </div>
+        </div>
+
+        <details class="sec-filters" open>
+          <summary>
+            <label
+              >Global Filters
+              <span
+                id="cityCountDisplay"
+                class="score-badge"
+                style="margin-left: 10px; font-size: 0.8rem; padding: 2px 8px"
+              ></span
+            ></label>
+          </summary>
+          <div class="section-group">
+            <div style="display: flex; flex-wrap: wrap; gap: 20px">
+              <div class="control-item">
+                <span class="sub-label">Focus</span>
+                <div class="btn-group" id="focusButtons">
+                  <button
+                    onclick="setFocus('Infrastructure')"
+                    title="How good is the bicycle network? Sort by this if you care mostly about cycling for recreation."
+                  >
+                    Infrastructure
+                  </button>
+                  <button
+                    class="active-balanced"
+                    onclick="setFocus('Balanced')"
+                    title="Infrastructure and destinations are equally weighted. Default sort."
+                  >
+                    Balanced
+                  </button>
+                  <button
+                    onclick="setFocus('Destination')"
+                    title="How accessible are destinations? Sort by this if you care mostly about cycling for transportation"
+                  >
+                    Destination
+                  </button>
+                </div>
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Minimum<br />Population</span>
+                <input
+                  type="number"
+                  id="minPop"
+                  value="0"
+                  min="0"
+                  max="10000000"
+                  step="1000"
+                  placeholder="e.g. 100000"
+                  oninput="handlePopChange(this)"
+                />
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Minimum<br />Score</span>
+                <input
+                  type="number"
+                  id="minScore"
+                  value="0"
+                  min="0"
+                  max="99"
+                  step="1"
+                  placeholder="e.g. 50"
+                  oninput="handleMinScoreChange(this)"
+                />
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Lower Accuracy<br />Cities</span>
+                <div
+                  class="checkbox-wrapper"
+                  title="Include cities that have less complete OpenStreetMap data. (Infrastructure data such as speed limits and surface quality is approximated, missing destinations are just missing. So these are likely underscored on destinations, and sometimes a little underscored on infrastructure as well.)"
+                >
+                  <input
+                    type="checkbox"
+                    id="includeLowAcc"
+                    checked
+                    onchange="updateView()"
+                  />
+                </div>
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Subdivisions</span>
+                <div class="checkbox-wrapper" title="Include subdivisions of the largest division ran (can be neighborhoods, boroughs, or tiny city propers)">
+                  <input
+                    type="checkbox"
+                    id="includeSubdivisions"
+                    onchange="updateView()"
+                  />
+                </div>
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Continent</span>
+                <select id="regionFilter" onchange="updateView()">
+                  <option value="All">All</option>
+                  <option value="North America">North America</option>
+                  <option value="Europe">Europe</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="sec-view" open>
+          <summary>
+            <label
+              >View Settings
+              <span
+                id="tryTheseText"
+                style="
+                  color: #d73027;
+                  font-size: 0.75rem;
+                  margin-left: 5px;
+                  animation: pulse 2s infinite;
+                "
+                >★ Try these!</span
+              ></label
+            >
+          </summary>
+          <div class="section-group">
+            <div style="display: flex; flex-wrap: wrap; gap: 20px">
+              <div id="agg-control" class="control-item">
+                <span class="sub-label">Data Aggregation</span>
+                <div class="btn-group" id="aggButtons">
+                  <button
+                    onclick="setAggMode('City Wide')"
+                    title="Traditional analysis of the entire area within a city's borders (good for if you are looking for how consistent the city is at building a strong bike network across its neighborhoods."
+                  >
+                    City Wide
+                  </button>
+                  <button
+                    class="active"
+                    onclick="setAggMode('Best Area')"
+                    title="Analysis of the best quarter of a city (less biased by how much of the metro area is inside city limits when comparing 2 cities, and more useful for choosing cities to live in)."
+                  >
+                    Best Area
+                  </button>
+                </div>
+                <input type="hidden" id="aggFilter" value="Best Area" />
+              </div>
+
+              <div id="map-control" class="control-item">
+                <span class="sub-label">Map Level </span>
+                <div class="btn-group" id="mapLevelButtons">
+                  <button class="active" onclick="setMapLevel('Country')" title="Countries by their highest scoring city">
+                    Country
+                  </button>
+                  <button
+                    onclick="setMapLevel('State')"
+                    title="Some countries broken down by their highest scoring city in each region (it's oomplicated to add regional breakdowns, so only countries with 10+ cities included are supported for now)."
+                  >
+                    Region
+                  </button>
+                  <button onclick="setMapLevel('City')" title="All Cities">City</button>
+                </div>
+                <input type="hidden" id="mapLevel" value="Country" />
+              </div>
+            </div>
+
+            <div
+              id="graph-options"
+              class="hidden"
+              style="
+                display: flex;
+                flex-wrap: wrap;
+                gap: 20px;
+                margin-top: 10px;
+              "
+            >
+              <div class="control-item">
+                <span class="sub-label">Graph Labels</span>
+                <div class="btn-group" id="labelButtons">
+                  <button class="active" onclick="setLabelMode('None')">
+                    None
+                  </button>
+                  <button onclick="setLabelMode('Pop')">Highest Population</button>
+                  <button onclick="setLabelMode('Score')">Highest Score</button>
+                </div>
+              </div>
+
+              <div class="control-item">
+                <span class="sub-label">Point Scaling</span>
+                <input
+                  type="range"
+                  id="sizeSlider"
+                  min="0"
+                  max="100"
+                  value="50"
+                />
+              </div>
+
+              <div class="control-item" style="justify-content: center">
+                <div class="checkbox-wrapper">
+                  <input type="checkbox" id="forceCircle" />
+                  <span class="sub-label">Force Circles</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <input
+		  type="checkbox"
+		  id="colorblindMode"
+		  onchange="updateView()"
+		  style="display: none"
+		/>
+
+        <details class="sec-export" id="title-section" open>
+          <summary><label>Name & Export</label></summary>
+          <div class="section-group">
+            <div class="control-item">
+              <input
+                type="text"
+                id="graphTitle"
+                value="City Bike Performance: Avg Score vs Best Area"
+              />
+            </div>
+            <div class="control-item">
+              <button
+                class="action-btn"
+                onclick="downloadChart()"
+                style="margin-top: 0"
+              >
+                Download Full Size Image
+              </button>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div id="chart-container" class="hidden"></div>
+    <div id="map-container"></div>
+
+    <div id="list-view-container">
+      <div class="list-grid" id="listGrid"></div>
+    </div>
+
+    <script>
+      // --- CUSTOM COLOR SCALE (Red -> Orange -> Yellow -> Green) ---
+      // Domain 0.0-1.0 maps to score 0-100 roughly.
+      // 0-25: Red, 25-50: Orange, 50-80: Light Green, 80+: Dark Green
+      const CUSTOM_COLORSCALE = [
+        [0.0, "#8b0000"], // Dark Red
+        [0.2, "#d73027"], // Red
+        [0.35, "#c97d32"], // Orange
+        [0.5, "#ccba47"], // Yellow
+        [0.65, "#d9ef8b"], // Light Greenish
+        [0.875, "#91cf60"], // Green
+        [1.0, "#1a9850"], // Dark Green
+      ];
+
+      // --- GLOBAL STATE ---
+      let rawData = [];
+      let currentMapScale = 1;
+      let currentFocus = "Balanced";
+      let currentLabelMode = "None";
+      let currentView = "map"; // Starts on map
+      let userEditedMapTitle = false;
+      let customMapTitle = "";
+      let userEditedGraphTitle = false;
+      let customGraphTitle = "";
+      let currentIndivStat = "Safe Area (sq mi)";
+      let statReverse = false;
+      let neighborDispReverse = false;
+      let focusDispReverse = false;
+      let pfbReverse = true;
+      let copenhagenReverse = true;
+
+      document
+        .getElementById("csvFile")
+        .addEventListener("change", handleFileUpload);
+      // Uses Plotly.relayout to instantly update the text on the screen without freezing the app.
+      document.getElementById("graphTitle").addEventListener("input", (e) => {
+		  const newText = e.target.value;
+
+		  if (currentView === "map") {
+			userEditedMapTitle = true;
+			customMapTitle = newText;
+			safeRelayout("map-container", { "title.text": `<b>${newText}</b>` });
+		  } else if (currentView === "graph") {
+			userEditedGraphTitle = true;
+			customGraphTitle = newText;
+			safeRelayout("chart-container", { "title.text": `<b>${newText}</b>` });
+		  }
+		});
+      document
+        .getElementById("sizeSlider")
+        .addEventListener("input", updateView);
+      document
+        .getElementById("forceCircle")
+        .addEventListener("change", updateView);
+
+      document.addEventListener("keydown", function (event) {
+        // event.code === 'KeyU' works perfectly regardless of uppercase/lowercase/Shift
+        if (event.altKey && event.code === "KeyU") {
+          event.preventDefault();
+          document.getElementById("csvFile").click();
+        }
+      });
+
+      // PapaParse has a built-in 'download: true' flag that handles the fetch API for you.
+      function loadDefaultData() {
+        Papa.parse("data_for_web.csv", {
+          download: true,
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            rawData = results.data;
+            updateView(); // Automatically builds the map and lists
+          },
+          error: function (err) {
+            // Fails silently for the user, but tells you in the F12 console if the file is missing
+            console.warn(
+              "Default web data not found. Awaiting manual upload.",
+              err,
+            );
+          },
+        });
+      }
+
+      // Settings no longer auto-minimize; one full-section hide/show button works at every screen size.
+      window.addEventListener("DOMContentLoaded", () => {
+        loadDefaultData();
+        lockSettingsSectionsOpen();
+        syncSettingsToggleState();
+		setupMobileTitleTooltips();
+      });
+
+		let lastWindowWidth = window.innerWidth;
+		let layoutResizeTimer = null;
+
+		window.addEventListener("resize", () => {
+		  const newWidth = window.innerWidth;
+
+		  // Mobile browsers resize height constantly when the address bar hides/shows.
+		  // Ignore height-only resizes.
+		  if (Math.abs(newWidth - lastWindowWidth) < 20) return;
+
+		  lastWindowWidth = newWidth;
+
+		  clearTimeout(layoutResizeTimer);
+		  layoutResizeTimer = setTimeout(() => {
+			syncSettingsToggleState();
+			if (rawData.length > 0) updateView();
+		  }, 250);
+		});
+		
+		
+		function setupMobileTitleTooltips() {
+		  const titledElements = document.querySelectorAll("[title]");
+
+		  titledElements.forEach((el) => {
+			const titleText = el.getAttribute("title");
+			if (!titleText) return;
+
+			el.dataset.mobileHelp = titleText;
+
+			// Helps screen readers without changing visible layout.
+			if (!el.getAttribute("aria-label")) {
+			  el.setAttribute("aria-label", titleText);
+			}
+		  });
+
+		  const tooltip = document.createElement("div");
+		  tooltip.className = "mobile-help-tooltip";
+		  document.body.appendChild(tooltip);
+
+		  let pressTimer = null;
+		  let activeTarget = null;
+		  let blockNextClick = false;
+
+		  function isMobileLike() {
+			return window.matchMedia("(hover: none), (pointer: coarse)").matches;
+		  }
+
+		  function hideTooltip() {
+			tooltip.classList.remove("visible");
+			activeTarget = null;
+		  }
+
+		  function showTooltip(target) {
+			const text = target.dataset.mobileHelp;
+			if (!text) return;
+
+			tooltip.textContent = text;
+			tooltip.classList.add("visible");
+
+			// Temporarily place it so we can measure it.
+			tooltip.style.left = "12px";
+			tooltip.style.top = "12px";
+
+			const tooltipRect = tooltip.getBoundingClientRect();
+			const targetRect = target.getBoundingClientRect();
+
+			let left = targetRect.left + targetRect.width / 2 - tooltipRect.width / 2;
+			left = Math.max(12, Math.min(left, window.innerWidth - tooltipRect.width - 12));
+
+			let top = targetRect.bottom + 8;
+
+			// If it would go off the bottom, show above the control instead.
+			if (top + tooltipRect.height > window.innerHeight - 12) {
+			  top = targetRect.top - tooltipRect.height - 8;
+			}
+
+			top = Math.max(12, top);
+
+			tooltip.style.left = `${left}px`;
+			tooltip.style.top = `${top}px`;
+
+			activeTarget = target;
+
+			if (navigator.vibrate) {
+			  navigator.vibrate(10);
+			}
+		  }
+
+		  document.addEventListener(
+			"touchstart",
+			(event) => {
+			  if (!isMobileLike()) return;
+
+			  const target = event.target.closest("[data-mobile-help]");
+			  if (!target) {
+				hideTooltip();
+				return;
+			  }
+
+			  activeTarget = target;
+
+			  clearTimeout(pressTimer);
+			  pressTimer = setTimeout(() => {
+				showTooltip(target);
+				blockNextClick = true;
+
+				// Prevent accidental button activation after long-press.
+				setTimeout(() => {
+				  blockNextClick = false;
+				}, 700);
+			  }, 550);
+			},
+			{ passive: true },
+		  );
+
+		  document.addEventListener(
+			"touchmove",
+			() => {
+			  clearTimeout(pressTimer);
+			},
+			{ passive: true },
+		  );
+
+		  document.addEventListener(
+			"touchend",
+			(event) => {
+			  clearTimeout(pressTimer);
+
+			  if (blockNextClick) {
+				event.preventDefault();
+				event.stopPropagation();
+			  }
+			},
+			{ capture: true, passive: false },
+		  );
+
+		  document.addEventListener(
+			"click",
+			(event) => {
+			  if (blockNextClick) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				blockNextClick = false;
+				return;
+			  }
+
+			  if (!event.target.closest("[data-mobile-help]")) {
+				hideTooltip();
+			  }
+			},
+			true,
+		  );
+
+		  window.addEventListener("scroll", hideTooltip, { passive: true });
+		  window.addEventListener("resize", hideTooltip);
+
+		  document.addEventListener("keydown", (event) => {
+			if (event.key === "Escape") hideTooltip();
+		  });
+		}
+
+      function getSettingsSections() {
+        return [
+          document.querySelector(".sec-filters"),
+          document.querySelector(".sec-view"),
+          document.querySelector(".sec-export"),
+        ].filter(Boolean);
+      }
+		
+		
+		function safeRelayout(plotId, update) {
+		  const plotDiv = document.getElementById(plotId);
+
+		  // If Plotly has not created the plot yet, skip instead of crashing.
+		  if (!plotDiv || !plotDiv.data || !plotDiv.layout) return;
+
+		  Plotly.relayout(plotDiv, update).catch((err) => {
+			console.warn(`Plotly relayout skipped for ${plotId}:`, err);
+		  });
+		}
+
+      function getControlsGrid() {
+        return document.querySelector(".controls-grid");
+      }
+
+      function updateSettingsToggleText() {
+        const btn = document.getElementById("settingsToggleBtn");
+        const grid = getControlsGrid();
+        if (!btn || !grid) return;
+        const settingsHidden = grid.classList.contains("settings-hidden");
+        btn.textContent = settingsHidden ? "Show Settings" : "Hide Settings";
+      }
+
+      function setAllSettingsVisible(visible) {
+        const grid = getControlsGrid();
+        if (!grid) return;
+        grid.classList.toggle("settings-hidden", !visible);
+        getSettingsSections().forEach((section) => {
+          section.open = true;
+        });
+        updateSettingsToggleText();
+      }
+
+      function toggleAllSettings(event) {
+        if (event) event.preventDefault();
+        const grid = getControlsGrid();
+        if (!grid) return;
+        setAllSettingsVisible(grid.classList.contains("settings-hidden"));
+      }
+
+      function syncSettingsToggleState() {
+        getSettingsSections().forEach((section) => {
+          section.open = true;
+        });
+        updateSettingsToggleText();
+      }
+
+      function lockSettingsSectionsOpen() {
+        getSettingsSections().forEach((section) => {
+          section.open = true;
+          const summary = section.querySelector("summary");
+          if (!summary || summary.dataset.individualCollapseDisabled === "true")
+            return;
+          summary.dataset.individualCollapseDisabled = "true";
+          summary.addEventListener("click", (event) => {
+            event.preventDefault();
+          });
+        });
+      }
+
+      function handlePopChange(el) {
+        let val = parseFloat(el.value);
+        if (isNaN(val)) val = 0;
+        if (val > 10000000) {
+          val = 10000000;
+          el.value = val;
+        }
+        if (val < 0) {
+          val = 0;
+          el.value = val;
+        }
+        if (val < 20000) el.step = 1000;
+        else if (val < 200000) el.step = 10000;
+        else el.step = 100000;
+        updateView();
+      }
+
+      function handleMinScoreChange(el) {
+        let val = parseInt(el.value);
+        if (isNaN(val)) val = 0;
+        if (val > 99) {
+          val = 99;
+          el.value = val;
+        }
+        if (val < 0) {
+          val = 0;
+          el.value = val;
+        }
+        updateView();
+      }
+
+      function setAggMode(mode) {
+        document.getElementById("aggFilter").value = mode;
+        document.querySelectorAll("#aggButtons button").forEach((btn) => {
+          btn.classList.toggle("active", btn.textContent.trim() === mode);
+        });
+        updateView();
+      }
+
+      function formatPop(num) {
+        if (!num) return "0";
+        return new Intl.NumberFormat("en-US", {
+          maximumSignificantDigits: 2,
+        }).format(num);
+      }
+
+      function cycleView() {
+        const btn = document.getElementById("viewToggleBtn");
+        const graphOpts = document.getElementById("graph-options");
+        const mapControl = document.getElementById("map-control");
+        const aggControl = document.getElementById("agg-control");
+        const titleSection = document.getElementById("title-section");
+        const accessSection = document.getElementById("access-section");
+        const chartC = document.getElementById("chart-container");
+        const mapC = document.getElementById("map-container");
+        const listC = document.getElementById("list-view-container");
+        const tryThese = document.getElementById("tryTheseText");
+
+        // First, hide everything by adding the hidden class
+        graphOpts.classList.add("hidden");
+        mapControl.classList.add("hidden");
+        aggControl.classList.add("hidden");
+        titleSection.classList.add("hidden");
+        if (accessSection) accessSection.classList.add("hidden");
+        chartC.classList.add("hidden");
+        mapC.classList.add("hidden");
+        listC.classList.add("hidden");
+
+        // Now show the correct combination based on currentView
+        if (currentView === "map") {
+          // Switching from map to graph
+          currentView = "graph";
+          btn.textContent = "Switch to List View";
+          if (tryThese) tryThese.style.display = "none";
+
+          graphOpts.classList.remove("hidden");
+          chartC.classList.remove("hidden");
+          titleSection.classList.remove("hidden");
+          // map and list remain hidden
+          if (accessSection) accessSection.classList.remove("hidden");
+        } else if (currentView === "graph") {
+          // Switching from graph to list
+          currentView = "list";
+          btn.textContent = "Switch to Map View";
+          if (tryThese) tryThese.style.display = "none";
+
+          listC.classList.remove("hidden");
+          aggControl.classList.remove("hidden");
+          // graph, map, options remain hidden
+        } else {
+          // currentView === 'list'
+          // Switching from list to map
+          currentView = "map";
+          btn.textContent = "Switch to Graph View";
+          if (tryThese) tryThese.style.display = "inline";
+
+          mapC.classList.remove("hidden");
+          mapControl.classList.remove("hidden");
+          aggControl.classList.remove("hidden");
+          titleSection.classList.remove("hidden");
+          // graph, list remain hidden
+          if (accessSection) accessSection.classList.remove("hidden");
+        }
+
+        updateSettingsToggleText();
+        updateView();
+      }
+
+      function setFocus(focusType) {
+        currentFocus = focusType;
+        document.querySelectorAll("#focusButtons button").forEach((btn) => {
+          const text = btn.textContent.trim();
+          btn.classList.remove(
+            "active",
+            "active-infra",
+            "active-balanced",
+            "active-dest",
+          );
+          if (text === focusType) {
+            if (text === "Infrastructure") btn.classList.add("active-infra");
+            else if (text === "Balanced") btn.classList.add("active-balanced");
+            else btn.classList.add("active-dest");
+          }
+        });
+        updateView();
+      }
+
+      function setLabelMode(mode) {
+        currentLabelMode = mode;
+        document.querySelectorAll("#labelButtons button").forEach((btn) => {
+          const text = btn.textContent.trim();
+          const isActive = (text === "None" && mode === "None") || text.includes(mode);
+          btn.classList.toggle("active", isActive);
+        });
+        updateView();
+      }
+
+      function setMapLevel(level) {
+        document.getElementById("mapLevel").value = level;
+        document.querySelectorAll("#mapLevelButtons button").forEach((btn) => {
+          const text = btn.textContent.trim();
+          const isActive =
+            (level === "Country" && text === "Country") ||
+            (level === "State" && text === "Region") ||
+            (level === "City" && text === "City");
+          btn.classList.toggle("active", isActive);
+        });
+        updateView();
+      }
+
+      function downloadChart() {
+        if (currentView === "graph") {
+          const chartDiv = document.getElementById("chart-container");
+          const annotations = chartDiv.layout.annotations || [];
+          const watermarkIndex = annotations.findIndex(
+            (a) => a.text === "bikefriendlinessindex.org",
+          );
+
+          let relayoutUpdate = {
+            paper_bgcolor: "#ffffff",
+          };
+
+          let relayoutRevert = {
+            paper_bgcolor: "rgba(0,0,0,0)",
+          };
+
+          // Hide the colorblind Plotly button during export.
+          if (chartDiv.layout?.updatemenus?.length) {
+            relayoutUpdate["updatemenus[0].visible"] = false;
+            relayoutRevert["updatemenus[0].visible"] = true;
+          }
+
+          Plotly.relayout("chart-container", relayoutUpdate)
+            .then(() => {
+              return Plotly.downloadImage("chart-container", {
+                format: "png",
+                width: 1280,
+                height: 900,
+                filename: "bike_safety_chart",
+              });
+            })
+            .then(() => {
+              Plotly.relayout("chart-container", relayoutRevert);
+            });
+        } else if (currentView === "map") {
+          const mapDiv = document.getElementById("map-container");
+          const annotations = mapDiv.layout.annotations || [];
+          const watermarkIndex = annotations.findIndex(
+            (a) => a.text === "bikefriendlinessindex.org",
+          );
+
+          let relayoutUpdate = {
+            paper_bgcolor: "#ffffff",
+          };
+
+          let relayoutRevert = {
+            paper_bgcolor: "rgba(0,0,0,0)",
+          };
+
+          // Hide the colorblind Plotly button during export.
+          if (mapDiv.layout?.updatemenus?.length) {
+            relayoutUpdate["updatemenus[0].visible"] = false;
+            relayoutRevert["updatemenus[0].visible"] = true;
+          }
+
+          if (watermarkIndex !== -1) {
+            relayoutUpdate[`annotations[${watermarkIndex}].font.size`] = 24;
+            relayoutUpdate[`annotations[${watermarkIndex}].bgcolor`] =
+              "#ffffff";
+
+            relayoutRevert[`annotations[${watermarkIndex}].font.size`] = 12;
+            // Reverts it back to the site blue
+            relayoutRevert[`annotations[${watermarkIndex}].bgcolor`] =
+              "#cce0ff";
+          }
+
+          Plotly.relayout("map-container", relayoutUpdate)
+            .then(() => {
+              return Plotly.downloadImage("map-container", {
+                format: "png",
+                width: 1920,
+                height: 960,
+                filename: "bike_safety_map",
+              });
+            })
+            .then(() => {
+              Plotly.relayout("map-container", relayoutRevert);
+            });
+        } else {
+          alert("Switch to Graph or Map View to download.");
+        }
+      }
+
+      function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        Papa.parse(file, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function (results) {
+            rawData = results.data;
+            updateView();
+            event.target.value = "";
+          },
+        });
+      }
+
+      function updateStat(val) {
+        currentIndivStat = val;
+        updateList();
+      }
+      function toggleStatSort() {
+        statReverse = !statReverse;
+        updateList();
+      }
+      function toggleNeighborDisp(mode) {
+        neighborDispReverse = mode === "smallest";
+        updateList();
+      }
+      function toggleFocusDisp(mode) {
+        focusDispReverse = mode === "dest";
+        updateList();
+      }
+      function togglePFB(mode) {
+        pfbReverse = mode === "overrated";
+        updateList();
+      }
+      function toggleCopenhagen(mode) {
+        copenhagenReverse = mode === "overrated";
+        updateList();
+      }
+
+      // --- DATA HELPERS ---
+      function formatLocation(name) {
+        if (!name) return "Unknown";
+        const upper = name.trim().toUpperCase();
+        const mapping = {
+          ALABAMA: "AL",
+          ALASKA: "AK",
+          ARIZONA: "AZ",
+          ARKANSAS: "AR",
+          CALIFORNIA: "CA",
+          COLORADO: "CO",
+          CONNECTICUT: "CT",
+          DELAWARE: "DE",
+          FLORIDA: "FL",
+          HAWAII: "HI",
+          IDAHO: "ID",
+          ILLINOIS: "IL",
+          INDIANA: "IN",
+          IOWA: "IA",
+          KANSAS: "KS",
+          KENTUCKY: "KY",
+          LOUISIANA: "LA",
+          MAINE: "ME",
+          MARYLAND: "MD",
+          MASSACHUSETTS: "MA",
+          MICHIGAN: "MI",
+          MINNESOTA: "MN",
+          MISSISSIPPI: "MS",
+          MISSOURI: "MO",
+          MONTANA: "MT",
+          NEBRASKA: "NE",
+          NEVADA: "NV",
+          "NEW HAMPSHIRE": "NH",
+          "NEW JERSEY": "NJ",
+          "NEW MEXICO": "NM",
+          "NEW YORK": "NY",
+          "NORTH CAROLINA": "NC",
+          "NORTH DAKOTA": "ND",
+          OHIO: "OH",
+          OKLAHOMA: "OK",
+          OREGON: "OR",
+          PENNSYLVANIA: "PA",
+          "RHODE ISLAND": "RI",
+          "SOUTH CAROLINA": "SC",
+          "SOUTH DAKOTA": "SD",
+          TENNESSEE: "TN",
+          TEXAS: "TX",
+          UTAH: "UT",
+          VERMONT: "VT",
+          VIRGINIA: "VA",
+          WASHINGTON: "WA",
+          "WEST VIRGINIA": "WV",
+          WISCONSIN: "WI",
+          WYOMING: "WY",
+          "DISTRICT OF COLUMBIA": "DC",
+          ALBERTA: "AB",
+          "BRITISH COLUMBIA": "BC",
+          MANITOBA: "MB",
+          "NEW BRUNSWICK": "NB",
+          "NEWFOUNDLAND AND LABRADOR": "NL",
+          "NORTHWEST TERRITORIES": "NT",
+          "NOVA SCOTIA": "NS",
+          NUNAVUT: "NU",
+          ONTARIO: "ON",
+          "PRINCE EDWARD ISLAND": "PE",
+          QUEBEC: "QC",
+          SASKATCHEWAN: "SK",
+          "YUKON TERRITORY": "YT",
+        };
+        return mapping[upper] || name;
+      }
+
+      function getRegion(locationStr) {
+        if (!locationStr) return "Other";
+
+        const countryName = getCountryName(locationStr).toUpperCase();
+
+        if (countryName === "CHINA") return "China";
+        if (countryName === "UNITED KINGDOM") return "United Kingdom";
+        if (countryName === "FRANCE") return "France";
+        if (countryName === "GERMANY") return "Germany";
+        if (countryName === "BRAZIL") return "Brazil";
+        if (countryName === "ITALY") return "Italy";
+        if (countryName === "MEXICO") return "Mexico";
+
+        if (countryName === "UNITED STATES" || countryName === "CANADA")
+          return "North America";
+
+        const euroNames = [
+          "ALBANIA",
+          "ANDORRA",
+          "ARMENIA",
+          "AUSTRIA",
+          "AZERBAIJAN",
+          "BELARUS",
+          "BELGIUM",
+          "BOSNIA",
+          "HERZEGOVINA",
+          "BULGARIA",
+          "CROATIA",
+          "CYPRUS",
+          "CZECHIA",
+          "CZECH REPUBLIC",
+          "DENMARK",
+          "ESTONIA",
+          "FINLAND",
+          "GEORGIA",
+          "GREECE",
+          "HUNGARY",
+          "ICELAND",
+          "IRELAND",
+          "KAZAKHSTAN",
+          "KOSOVO",
+          "LATVIA",
+          "LIECHTENSTEIN",
+          "LITHUANIA",
+          "LUXEMBOURG",
+          "MALTA",
+          "MOLDOVA",
+          "MONACO",
+          "MONTENEGRO",
+          "NETHERLANDS",
+          "MACEDONIA",
+          "NORWAY",
+          "POLAND",
+          "PORTUGAL",
+          "ROMANIA",
+          "RUSSIA",
+          "SAN MARINO",
+          "SERBIA",
+          "SLOVAKIA",
+          "SLOVENIA",
+          "SPAIN",
+          "SWEDEN",
+          "SWITZERLAND",
+          "TURKEY",
+          "UKRAINE",
+          "VATICAN",
+        ];
+
+        if (euroNames.some((n) => countryName.includes(n))) return "Europe";
+        return "Other";
+      }
+
+      function getHardcodedRegion(city, currentState) {
+        if (!city) return currentState;
+
+        const cleanCity = cleanCityName(city).toLowerCase();
+        const upperState = (currentState || "").trim().toUpperCase();
+
+        // 1. NORTH AMERICAN SHIELD
+        // We check this first. If the city is in the US or Canada (based on the CSV state column),
+        // we return the state as-is. This prevents "London, ON" or "Paris, TX" from being
+        // caught by the European hardcodes below.
+        const naStates = [
+          "AL",
+          "AK",
+          "AZ",
+          "AR",
+          "CA",
+          "CO",
+          "CT",
+          "DE",
+          "FL",
+          "GA",
+          "HI",
+          "ID",
+          "IL",
+          "IN",
+          "IA",
+          "KS",
+          "KY",
+          "LA",
+          "ME",
+          "MD",
+          "MA",
+          "MI",
+          "MN",
+          "MS",
+          "MO",
+          "MT",
+          "NE",
+          "NV",
+          "NH",
+          "NJ",
+          "NM",
+          "NY",
+          "NC",
+          "ND",
+          "OH",
+          "OK",
+          "OR",
+          "PA",
+          "RI",
+          "SC",
+          "SD",
+          "TN",
+          "TX",
+          "UT",
+          "VT",
+          "VA",
+          "WA",
+          "WV",
+          "WI",
+          "WY",
+          "DC",
+          "AB",
+          "BC",
+          "MB",
+          "NB",
+          "NL",
+          "NT",
+          "NS",
+          "NU",
+          "ON",
+          "PE",
+          "QC",
+          "SK",
+          "YT",
+        ];
+
+        if (naStates.includes(upperState)) {
+          return currentState;
+        }
+
+        // 2. REGIONAL MAPPING DICTIONARY
+        const CITY_TO_REGION = {
+          // --- GERMANY (16 States) ---
+          berlin: "Berlin",
+          hamburg: "Hamburg",
+          munich: "Bayern",
+          nuremberg: "Bayern",
+          cologne: "Nordrhein-Westfalen",
+          bonn: "Nordrhein-Westfalen",
+          münster: "Nordrhein-Westfalen",
+          munster: "Nordrhein-Westfalen",
+          essen: "Nordrhein-Westfalen",
+          duisburg: "Nordrhein-Westfalen",
+          dortmund: "Nordrhein-Westfalen",
+          dusseldorf: "Nordrhein-Westfalen",
+          düsseldorf: "Nordrhein-Westfalen",
+          frankfurt: "Hessen",
+          stuttgart: "Baden-Württemberg",
+          freiburg: "Baden-Württemberg",
+          karlsruhe: "Baden-Württemberg",
+          leipzig: "Sachsen",
+          dresden: "Sachsen",
+          hannover: "Niedersachsen",
+          hanover: "Niedersachsen",
+          oldenburg: "Niedersachsen",
+          bremen: "Bremen",
+          kiel: "Schleswig-Holstein",
+          chemnitz: "Sachsen",
+          wuppertal: "Nordrhein-Westfalen",
+          bielefeld: "Nordrhein-Westfalen",
+          mannheim: "Baden-Württemberg",
+          augsburg: "Bayern",
+		magdeburg: "Sachsen-Anhalt",
+		potsdam: "Brandenburg",
+		rostock: "Mecklenburg-Vorpommern",
+		mainz: "Rheinland-Pfalz",
+		erfurt: "Thüringen",
+		saarbrucken: "Saarland",
+		saarbrücken: "Saarland",
+		wiesbaden: "Hessen",
+		
+          // --- FRANCE (13 Regions) ---
+          paris: "Île-de-France",
+          lyon: "Auvergne-Rhône-Alpes",
+          grenoble: "Auvergne-Rhône-Alpes",
+          marseille: "Provence-Alpes-Côte d'Azur",
+          nice: "Provence-Alpes-Côte d'Azur",
+          strasbourg: "Grand Est",
+          bordeaux: "Nouvelle-Aquitaine",
+          nantes: "Pays de la Loire",
+          toulouse: "Occitanie",
+          montpellier: "Occitanie",
+          lille: "Hauts-de-France",
+          rennes: "Bretagne",
+          dijon: "Bourgogne-Franche-Comté",
+          amiens: "Hauts-de-France",
+          reims: "Grand Est",
+          "saint-etienne": "Auvergne-Rhône-Alpes",
+          toulon: "Provence-Alpes-Côte d'Azur",
+		 tours: "Centre-Val de Loire",
+		 "le havre": "Normandie",
+		 rouen: "Normandie",
+		 ajaccio: "Corse",
+		"fort-de-france": "Martinique",
+		mamoudzou: "Mayotte",
+
+          // --- ITALY (20 Regions) ---
+          rome: "Lazio",
+          milan: "Lombardia",
+          florence: "Toscana",
+          bologna: "Emilia-Romagna",
+          ferrara: "Emilia-Romagna",
+          naples: "Campania",
+          bolzano: "Trentino-Alto Adige/Südtirol",
+          trento: "Trentino-Alto Adige/Südtirol",
+          turin: "Piemonte",
+          genoa: "Liguria",
+          palermo: "Sicilia",
+          catania: "Sicilia",
+          bari: "Puglia",
+          verona: "Veneto",
+          siena: "Toscana",
+          messina: "Sicilia",
+          padua: "Veneto",
+          venice: "Veneto",
+		  cagliari: "Sardegna",
+		"reggio di calabria": "Calabria",
+		pescara: "Abruzzo",
+		trieste: "Friuli-Venezia Giulia",
+		ancona: "Marche",
+		matera: "Basilicata",
+		udine: "Friuli-Venezia Giulia",
+		termoli: "Molise",
+		perugia: "Umbria",
+		arezzo: "Toscana",
+		
+          // --- BRAZIL (26 States + DF) ---
+          "sao paulo": "SP",
+          sorocaba: "SP",
+          campinas: "SP",
+          "rio de janeiro": "RJ",
+          curitiba: "PR",
+          fortaleza: "CE",
+          recife: "Pernambuco",
+          "belo horizonte": "MG",
+          vitoria: "ES",
+          aracaju: "SE",
+          joinville: "Santa Catarina",
+          "porto alegre": "RS",
+          brasilia: "DF",
+          salvador: "BA",
+          manaus: "AM",
+          goiania: "GO",
+          belem: "Pará",
+          niteroi: "RJ",
+          "sao luis": "Maranhão",
+          maceio: "Alagoas",
+          natal: "RN",
+          teresina: "PI",
+          "joao pessoa": "PB",
+          guarulhos: "SP",
+		"boa vista": "RR",
+		"campo grande": "Mato Grosso do Sul",
+		macapa: "AP",
+		"rio branco": "AC",
+		"porto velho": "RO",
+		cuiaba: "Mato Grosso",
+		palmas: "TO",
+		uberlandia: "Minas Gerais",
+		londrina: "Paraná",
+		florianopolis: "Santa Catarina",
+		
+          // --- MEXICO (31 States + CDMX) ---
+          "mexico city": "Distrito Federal",
+          guadalajara: "Jalisco",
+          zapopan: "Jalisco",
+          merida: "Yucatán",
+          mérida: "Yucatán",
+          monterrey: "Nuevo León",
+          puebla: "Puebla",
+          leon: "Guanajuato",
+          queretaro: "Querétaro",
+          aguascalientes: "Aguascalientes",
+          oaxaca: "Oaxaca",
+          tijuana: "Baja California",
+          toluca: "México",
+          ecatepec: "México",
+		  juarez: "Chihuahua",
+		"culiacan rosales": "Sinaloa",
+		"victoria de durango": "Durango",
+		reynosa: "Tamaulipas",
+		tepic: "Nayarit",
+		"aguascalientes": "Aguascalientes",
+		"san luis potosi": "San Luis Potosí",
+		"santiago de queretaro": "Querétaro",
+		"veracruz": "Veracruz de Ignacio de la Llave",
+		"acapulco": "Guerrero",
+		"tuxtla gutierrez": "Chiapas",
+		villahermosa: "Tabasco",
+		cancun: "Quintana Roo",
+		"la paz": "Baja California Sur",
+		hermosillo: "Sonora",
+		saltillo: "Coahuila de Zaragoza",
+		"acapulco": "Guerrero",
+		"campeche": "Campeche",
+		tampico: "Tamaulipas",
+		"oaxaca de juarez": "Oaxaca",
+		"mexicali": "Baja California",
+		morelia: "Michoacán de Ocampo",
+		"chihuahua": "Chihuahua",
+		cuernavaca: "Morelos",
+		torreon: "Coahuila de Zaragoza",
+		pachuca: "Hidalgo",
+		manzanillo: "Colima",
+		"villa vicente guerrero": "Tlaxcala",
+
+          // --- CHINA (Provinces/Municipalities/SARs) ---
+          beijing: "北京市",
+          "chaoyang district (beijing)": "北京市",
+          shanghai: "上海市",
+          "lujiazui (shanghai)": "上海市",
+          "gusu district (suzhou)": "江苏省",
+          kunshan: "江苏省",
+          taicang: "江苏省",
+          "hong kong": "香港特别行政区",
+          macau: "澳门特别行政区",
+          "siming district": "福建省",
+          xiamen: "福建省",
+          guangzhou: "广东省",
+          shenzhen: "广东省",
+          zhuhai: "广东省",
+          yiwu: "浙江省",
+          haikou: "海南省",
+          dongguan: "广东省",
+          ezhou: "湖北省",
+          hebi: "河南省",
+		qionghai: "海南省",
+		yangshuo: "广西壮族自治区",
+		"dali city": "云南省",
+		sanya: "海南省",
+		zhongshan: "广东省",
+		shantou: "广东省",
+		wuhai: "内蒙古自治区",
+		jinjiang: "福建省",
+		haining: "浙江省",
+		wenling: "浙江省",
+		jiangyin: "江苏省",
+		zhangjiagang: "江苏省",
+		changshu: "江苏省",
+		yueqing: "浙江省",
+		cixi: "浙江省",
+		yixing: "江苏省",
+		fuqing: "福建省",
+		shishi: "福建省",
+		"xian": "陕西省",
+		"xi'an": "陕西省",
+		lanzhou: "甘肃省",
+		xining: "青海省",
+		yinchuan: "宁夏回族自治区",
+		urumqi: "新疆维吾尔自治区",
+		chengdu: "四川省",
+		guiyang: "贵州省",
+		kunming: "云南省",
+		lhasa: "西藏自治区",
+		nanning: "广西壮族自治区",
+		changsha: "湖南省",
+		taiyuan: "山西省",
+		nanchang: "江西省",
+		hefei: "安徽省",
+		qingdao: "山东省",
+		shijiazhuang: "河北省",
+		shenyang: "辽宁省",
+		changchun: "吉林省",
+		harbin: "黑龙江省",
+		wanzhou: "重庆市",
+		"yuzhong district": "重庆市",
+		guangzhou: "广东省",
+		wuhan: "湖北省",
+		tianjin: "天津市",
+		zhengzhou: "河南省",
+		nanjing: "江苏省",
+		ningbo: "浙江省",
+		jinan: "山东省",
+		fuzhou: "福建省",
+		nantong: "江苏省",
+
+          // --- UNITED KINGDOM (12 Regions for EER13NM Sync) ---
+          london: "London",
+          "city of london": "London",
+          hackney: "London",
+          islington: "London",
+          newham: "London",
+          "waltham forest": "London",
+		  southwark: "London",
+          birmingham: "West Midlands",
+          manchester: "North West",
+          liverpool: "North West",
+          leeds: "Yorkshire and The Humber",
+          sheffield: "Yorkshire and The Humber",
+          "milton keynes": "South East",
+          oxford: "South East",
+          southampton: "South East",
+          cambridge: "East of England",
+          bristol: "South West",
+          nottingham: "East Midlands",
+          "newcastle upon tyne": "North East",
+          edinburgh: "Scotland",
+          glasgow: "Scotland",
+          cardiff: "Wales",
+          belfast: "Northern Ireland",
+          bradford: "Yorkshire and The Humber",
+          leicester: "East Midlands",
+		  "leicester city": "East Midlands",
+          coventry: "West Midlands",
+          "kingston upon hull": "Yorkshire and The Humber",
+		  aberdeen: "Scotland",
+			swansea: "Wales",
+			derby: "East Midlands",
+        };
+
+        return CITY_TO_REGION[cleanCity] || currentState;
+      }
+
+      // to readable names strictly for frontend display (List, Graph, and Map hovers).
+      function getDisplayName(code) {
+        if (!code) return code;
+
+        const DISPLAY_MAP = {
+          // Brazil
+          AC: "Acre",
+          AL: "Alagoas",
+          AP: "Amapá",
+          AM: "Amazonas",
+          BA: "Bahia",
+          CE: "Ceará",
+          DF: "Distrito Federal",
+          ES: "Espírito Santo",
+          GO: "Goiás",
+          MA: "Maranhão",
+          //MT: "Mato Grosso",
+          //MS: "Mato Grosso do Sul",
+          MG: "Minas Gerais",
+          PA: "Pará",
+          PB: "Paraíba",
+          PR: "Paraná",
+          PE: "Pernambuco",
+          PI: "Piauí",
+          RJ: "Rio de Janeiro",
+          RN: "Rio Grande do Norte",
+          RS: "Rio Grande do Sul",
+          RO: "Rondônia",
+          RR: "Roraima",
+          SC: "Santa Catarina",
+          SP: "São Paulo",
+          SE: "Sergipe",
+          TO: "Tocantins",
+		"Mato Grosso": "Mato Grosso",
+		"Mato Grosso do Sul": "Mato Grosso do Sul",
+
+          // China
+          北京市: "Beijing",
+          上海市: "Shanghai",
+          江苏省: "Jiangsu",
+          浙江省: "Zhejiang",
+          福建省: "Fujian",
+          广东省: "Guangdong",
+          海南省: "Hainan",
+          香港特别行政区: "Hong Kong",
+          澳门特别行政区: "Macau",
+          湖北省: "Hubei",
+          河南省: "Henan",
+		  广西壮族自治区: "Guangxi",
+			云南省: "Yunnan",
+			内蒙古自治区: "Inner Mongolia",
+			陕西省: "Shaanxi",
+			甘肃省: "Gansu",
+			青海省: "Qinghai",
+			宁夏回族自治区: "Ningxia",
+			新疆维吾尔自治区: "Xinjiang",
+			四川省: "Sichuan",
+			贵州省: "Guizhou",
+			西藏自治区: "Tibet",
+			湖南省: "Hunan",
+			山西省: "Shanxi",
+			江西省: "Jiangxi",
+			安徽省: "Anhui",
+			山东省: "Shandong",
+			河北省: "Hebei",
+			辽宁省: "Liaoning",
+			吉林省: "Jilin",
+			黑龙江省: "Heilongjiang",
+			重庆市: "Chongqing",
+			天津市: "Tianjin",
+
+          // OPTIONAL: US States (Translates the CSV abbreviations into full names for the UI)
+          AL: "Alabama",
+          AK: "Alaska",
+          AZ: "Arizona",
+          AR: "Arkansas",
+          CA: "California",
+          CO: "Colorado",
+          CT: "Connecticut",
+          DE: "Delaware",
+          FL: "Florida",
+          GA: "Georgia",
+          HI: "Hawaii",
+          ID: "Idaho",
+          IL: "Illinois",
+          IN: "Indiana",
+          IA: "Iowa",
+          KS: "Kansas",
+          KY: "Kentucky",
+          LA: "Louisiana",
+          ME: "Maine",
+          MD: "Maryland",
+          MA: "Massachusetts",
+          MI: "Michigan",
+          MN: "Minnesota",
+          MS: "Mississippi",
+          MO: "Missouri",
+          MT: "Montana",
+          NE: "Nebraska",
+          NV: "Nevada",
+          NH: "New Hampshire",
+          NJ: "New Jersey",
+          NM: "New Mexico",
+          NY: "New York",
+          NC: "North Carolina",
+          ND: "North Dakota",
+          OH: "Ohio",
+          OK: "Oklahoma",
+          OR: "Oregon",
+          PA: "Pennsylvania",
+          RI: "Rhode Island",
+          SC: "South Carolina",
+          SD: "South Dakota",
+          TN: "Tennessee",
+          TX: "Texas",
+          UT: "Utah",
+          VT: "Vermont",
+          VA: "Virginia",
+          WA: "Washington",
+          WV: "West Virginia",
+          WI: "Wisconsin",
+          WY: "Wyoming",
+          DC: "District of Columbia",
+        };
+
+        return DISPLAY_MAP[code] || code;
+      }
+
+      function getFullLocationDisplay(stateCode) {
+        const displayName = getDisplayName(stateCode);
+        const countryName = getCountryName(stateCode);
+
+        // If it's the US, just return the state (e.g., "Ohio")
+        if (countryName === "United States") {
+          return displayName;
+        }
+
+        // If the region name is already the country name (e.g., "Germany"), prevent "Germany, Germany"
+        if (displayName === countryName) {
+          return displayName;
+        }
+
+        // Otherwise, return "Region, Country" (e.g., "Sachsen, Germany")
+        return displayName + ", " + countryName;
+      }
+		
+		function cleanCityName(name) {
+		  return (name || "").replace(/\*/g, "").trim();
+		}
+
+      function getCountryName(code) {
+        const c = code.toUpperCase().trim();
+
+        const us = [
+          "AL",
+          "AK",
+          "AZ",
+          "AR",
+          "CA",
+          "CO",
+          "CT",
+          "DE",
+          "FL",
+          "GA",
+          "HI",
+          "ID",
+          "IL",
+          "IN",
+          "IA",
+          "KS",
+          "KY",
+          "LA",
+          "ME",
+          "MD",
+          "MA",
+          "MI",
+          "MN",
+          "MS",
+          "MO",
+          "MT",
+          "NE",
+          "NV",
+          "NH",
+          "NJ",
+          "NM",
+          "NY",
+          "NC",
+          "ND",
+          "OH",
+          "OK",
+          "OR",
+          "PA",
+          "RI",
+          "SC",
+          "SD",
+          "TN",
+          "TX",
+          "UT",
+          "VT",
+          "VA",
+          "WA",
+          "WV",
+          "WI",
+          "WY",
+          "DC",
+        ];
+        const canada = [
+          "AB",
+          "BC",
+          "MB",
+          "NB",
+          "NL",
+          "NT",
+          "NS",
+          "NU",
+          "ON",
+          "PE",
+          "QC",
+          "SK",
+          "YT",
+          "CANADA",
+          "CAN",
+        ];
+        const australia = [
+          "NSW",
+          "VIC",
+          "QLD",
+          "WA(AU)",
+          "SA",
+          "TAS",
+          "ACT",
+          "NT(AU)",
+          "AUSTRALIA",
+          "AUS",
+        ];
+
+        // Ambiguous Brazilian state abbreviations that collide with US/Canadian codes use full names.
+        const brazil = [
+          "AC",
+          "AP",
+          "AM",
+          "BA",
+          "CE",
+          "DF",
+          "ES",
+          "GO",
+          //"MT",
+          //"MS",
+          "MG",
+          "PB",
+          "PR",
+          "PI",
+          "RJ",
+          "RN",
+          "RS",
+          "RO",
+          "RR",
+          "SP",
+          "SE",
+          "TO",
+          "BRAZIL",
+		  "MATO GROSSO",
+		  "MATO GROSSO DO SUL",
+          "SANTA CATARINA",
+          "PERNAMBUCO",
+          "PARÁ",
+          "PARA",
+          "MARANHÃO",
+          "MARANHAO",
+          "ALAGOAS",
+        ];
+        const mexico = [
+		  "AGUASCALIENTES",
+		  "BAJA CALIFORNIA",
+		  "BAJA CALIFORNIA SUR",
+		  "CAMPECHE",
+		  "CHIAPAS",
+		  "CHIHUAHUA",
+		  "COAHUILA",
+		  "COAHUILA DE ZARAGOZA",
+		  "COLIMA",
+		  "DISTRITO FEDERAL",
+		  "MEXICO CITY",
+		  "CIUDAD DE MÉXICO",
+		  "CIUDAD DE MEXICO",
+		  "DURANGO",
+		  "GUANAJUATO",
+		  "GUERRERO",
+		  "HIDALGO",
+		  "JALISCO",
+		  "MÉXICO",
+		  "MEXICO",
+		  "MEXICO STATE",
+		  "ESTADO DE MÉXICO",
+		  "ESTADO DE MEXICO",
+		  "MICHOACÁN",
+		  "MICHOACAN",
+		  "MICHOACÁN DE OCAMPO",
+		  "MICHOACAN DE OCAMPO",
+		  "MORELOS",
+		  "NAYARIT",
+		  "NUEVO LEÓN",
+		  "NUEVO LEON",
+		  "OAXACA",
+		  "PUEBLA",
+		  "QUERÉTARO",
+		  "QUERETARO",
+		  "QUINTANA ROO",
+		  "SAN LUIS POTOSÍ",
+		  "SAN LUIS POTOSI",
+		  "SINALOA",
+		  "SONORA",
+		  "TABASCO",
+		  "TAMAULIPAS",
+		  "TLAXCALA",
+		  "VERACRUZ",
+		  "VERACRUZ DE IGNACIO DE LA LLAVE",
+		  "YUCATÁN",
+		  "YUCATAN",
+		  "ZACATECAS",
+          "MEXICO",
+        ];
+        const germany = [
+          "BADEN-WÜRTTEMBERG",
+          "BAVARIA",
+          "BAYERN",
+          "BERLIN",
+          "BRANDENBURG",
+          "BREMEN",
+          "HAMBURG",
+          "HESSEN",
+          "MECKLENBURG-VORPOMMERN",
+          "NIEDERSACHSEN",
+          "NORDRHEIN-WESTFALEN",
+          "RHEINLAND-PFALZ",
+          "SAARLAND",
+          "SACHSEN",
+          "SACHSEN-ANHALT",
+          "SCHLESWIG-HOLSTEIN",
+          "THÜRINGEN",
+          "GERMANY",
+        ];
+        const france = [
+          "AUVERGNE-RHÔNE-ALPES",
+          "BOURGOGNE-FRANCHE-COMTÉ",
+          "BRETAGNE",
+          "CENTRE-VAL DE LOIRE",
+          "CORSE",
+          "GRAND EST",
+          "HAUTS-DE-FRANCE",
+          "ÎLE-DE-FRANCE",
+          "NORMANDIE",
+          "NOUVELLE-AQUITAINE",
+          "OCCITANIE",
+          "PAYS DE LA LOIRE",
+          "PROVENCE-ALPES-CÔTE D'AZUR",
+          "FRANCE",
+        ];
+        const italy = [
+          "PIEMONTE",
+          "VALLE D'AOSTA",
+          "LOMBARDIA",
+          "TRENTINO-ALTO ADIGE/SÜDTIROL",
+          "VENETO",
+          "FRIULI-VENEZIA GIULIA",
+          "LIGURIA",
+          "EMILIA-ROMAGNA",
+          "TOSCANA",
+          "UMBRIA",
+          "MARCHE",
+          "LAZIO",
+          "ABRUZZO",
+          "MOLISE",
+          "CAMPANIA",
+          "PUGLIA",
+          "BASILICATA",
+          "CALABRIA",
+          "SICILIA",
+          "SARDEGNA",
+          "ITALY",
+        ];
+        const uk = [
+          "LONDON",
+          "WEST MIDLANDS",
+          "NORTH WEST",
+          "YORKSHIRE AND THE HUMBER",
+          "SOUTH EAST",
+          "EAST OF ENGLAND",
+          "SOUTH WEST",
+          "SCOTLAND",
+          "WALES",
+          "NORTHERN IRELAND",
+          "NORTH EAST",
+          "EAST MIDLANDS",
+          "UK",
+          "UNITED KINGDOM",
+          "GB",
+        ];
+        const china = [
+          "香港特别行政区",
+          "澳门特别行政区",
+          "江苏省",
+          "浙江省",
+          "福建省",
+          "北京市",
+          "上海市",
+          "广东省",
+          "海南省",
+          "湖北省",
+          "河南省",
+		  "广西壮族自治区",
+		"云南省",
+		"内蒙古自治区",
+		"陕西省",
+		"甘肃省",
+		"甘肃省",
+		"青海省",
+		"宁夏回族自治区",
+		"新疆维吾尔自治区",
+		"四川省",
+		"贵州省",
+		"西藏自治区",
+		"湖南省",
+		"山西省",
+		"江西省",
+		"安徽省",
+		"山东省",
+		"河北省",
+		"辽宁省",
+		"吉林省",
+		"黑龙江省",
+		"重庆市",
+		"天津市",
+          "CHINA",
+        ];
+
+        if (us.includes(c)) return "United States";
+        if (canada.includes(c)) return "Canada";
+        if (australia.includes(c)) return "Australia";
+        if (brazil.includes(c)) return "Brazil";
+        if (mexico.includes(c)) return "Mexico";
+        if (germany.includes(c)) return "Germany";
+        if (france.includes(c)) return "France";
+        if (italy.includes(c)) return "Italy";
+        if (uk.includes(c)) return "United Kingdom";
+        if (china.includes(c)) return "China";
+
+        return code;
+      }
+
+      const cleanNum = (val, isRatio) => {
+        if (!val) return NaN;
+        let num = parseFloat(val.toString().replace(/[%,]/g, ""));
+        return isRatio ? num / 100.0 : num;
+      };
+
+      function processDataForGraph() {
+        const minPopVal =
+          parseFloat(document.getElementById("minPop").value) || 0;
+        const minScoreVal =
+          parseFloat(document.getElementById("minScore").value) || 0;
+        const regionFilter = document.getElementById("regionFilter").value;
+
+        const accCheckbox = document.getElementById("includeLowAcc");
+        const includeLowAcc = accCheckbox ? accCheckbox.checked : true;
+
+        const subCheckbox = document.getElementById("includeSubdivisions");
+        const includeSubdivisions = subCheckbox ? subCheckbox.checked : true;
+
+        const sliderVal = parseFloat(
+          document.getElementById("sizeSlider").value,
+        );
+        const scaleFactor = sliderVal / 100.0;
+        const aggMode = document.getElementById("aggFilter").value; // Need to know which score to test
+
+        let filtered = [];
+        rawData.forEach((row) => {
+          const city = row["City/municipality"];
+          if (!city) return;
+
+          const f = (row["Focus"] || "").trim().toLowerCase();
+          const a = (row["Aggregation"] || "").trim().toLowerCase();
+
+          if (
+            f !== "infrastructure" &&
+            f !== "balanced" &&
+            f !== "destination" &&
+            f !== ""
+          ) {
+            console.warn(
+              `Graph Filter Drop -> ${city}: Unrecognized Focus "${row["Focus"]}"`,
+            );
+          }
+          if (
+            a !== "city wide" &&
+            a !== "best area" &&
+            a !== "highest point" &&
+            a !== ""
+          ) {
+            console.warn(
+              `Graph Filter Drop -> ${city}: Unrecognized Aggregation "${row["Aggregation"]}"`,
+            );
+          }
+
+          if (f === currentFocus.toLowerCase() && a === "city wide") {
+            filtered.push(row);
+          }
+        });
+
+        const seenCities = new Set();
+        filtered = filtered.filter((row) => {
+          const cityKey =
+            cleanCityName(row["City/municipality"]) + "|" + row["State/ Country"];
+          if (seenCities.has(cityKey)) return false;
+          seenCities.add(cityKey);
+          return true;
+        });
+
+        const processed = [];
+        filtered.forEach((row) => {
+          const pop = cleanNum(row["Population"], false);
+          const avgScore = cleanNum(row["Average Score"], false);
+          const disparity = cleanNum(row["Disparity"], false);
+
+          if (isNaN(avgScore) || isNaN(disparity) || isNaN(pop)) {
+            console.warn(
+              `Graph Data Drop -> ${row["City/municipality"]}: Missing Data (Pop: ${pop}, Score: ${avgScore}, Disp: ${disparity})`,
+            );
+            return;
+          }
+
+          if (pop < minPopVal) return;
+
+          let targetScore =
+            aggMode === "Best Area" ? avgScore + disparity : avgScore;
+          if (targetScore < minScoreVal) return;
+
+          const AccuracyScore = parseFloat(row["Accuracy Score"]);
+          if (!includeLowAcc && !isNaN(AccuracyScore) && AccuracyScore < 15)
+            return;
+
+          const isSubdivision =
+            (row["Subdivision"] || "").trim().toLowerCase() === "yes";
+          if (!includeSubdivisions && isSubdivision) {
+            return;
+          }
+
+          const formattedLoc = formatLocation(row["State/ Country"]);
+          const finalLoc = getHardcodedRegion(
+            row["City/municipality"],
+            formattedLoc,
+          );
+          let region = row["Continent"]
+            ? row["Continent"].trim()
+            : getRegion(finalLoc);
+          if (region === "NA") region = "North America";
+          if (region === "EU") region = "Europe";
+
+          if (regionFilter !== "All" && region !== regionFilter) return;
+
+          const infraRatio = cleanNum(row["Infra ratio"], true) || 0;
+          const destRatio = cleanNum(row["Dest ratio"], true) || 0;
+          const popBasedSize = Math.pow(pop, 0.33) / 4.2;
+          const fixedSize = 10;
+          const finalSize =
+            fixedSize * (1 - scaleFactor) + popBasedSize * scaleFactor;
+
+          processed.push({
+            city: row["City/municipality"],
+            state: finalLoc,
+            pop: pop,
+            avgScore: avgScore,
+            bestAreaScore: avgScore + disparity,
+            focusBalance: infraRatio - destRatio,
+            sizeScaled: finalSize,
+            region: region,
+            raw: row,
+          });
+        });
+        processed.sort((a, b) => b.sizeScaled - a.sizeScaled);
+        return processed;
+      }
+
+      function processDataForList(targetAgg) {
+        const minPopVal =
+          parseFloat(document.getElementById("minPop").value) || 0;
+        const minScoreVal =
+          parseFloat(document.getElementById("minScore").value) || 0;
+        const regionFilter = document.getElementById("regionFilter").value;
+
+        const accCheckbox = document.getElementById("includeLowAcc");
+        const includeLowAcc = accCheckbox ? accCheckbox.checked : true;
+
+        const subCheckbox = document.getElementById("includeSubdivisions");
+        const includeSubdivisions = subCheckbox ? subCheckbox.checked : true;
+
+        const popMap = {};
+        const cwDataMap = {};
+
+        // 1. CREATE A STRICT KEY USING THE FOCUS
+        rawData
+          .filter(
+            (r) =>
+              (r["Aggregation"] || "").trim().toLowerCase() === "city wide",
+          )
+          .forEach((r) => {
+            const p = cleanNum(r["Population"], false);
+            const focus = (r["Focus"] || "").trim().toLowerCase();
+            const baseCityKey =
+              r["City/municipality"] + "|" + r["State/ Country"];
+
+            // Lock the key to BOTH the city and the specific focus (Balanced, Infra, Dest)
+            const strictKey = baseCityKey + "|" + focus;
+
+            if (!isNaN(p)) popMap[baseCityKey] = p;
+            cwDataMap[strictKey] = r; // Store it using the strict key
+          });
+
+        let filtered = [];
+        rawData.forEach((row) => {
+          const city = row["City/municipality"];
+          if (!city) return;
+
+          const f = (row["Focus"] || "").trim().toLowerCase();
+          const a = (row["Aggregation"] || "").trim().toLowerCase();
+
+          if (
+            f !== "infrastructure" &&
+            f !== "balanced" &&
+            f !== "destination" &&
+            f !== ""
+          ) {
+            console.warn(
+              `List Filter Drop -> ${city}: Unrecognized Focus "${row["Focus"]}"`,
+            );
+          }
+          if (
+            a !== "city wide" &&
+            a !== "best area" &&
+            a !== "highest point" &&
+            a !== ""
+          ) {
+            console.warn(
+              `List Filter Drop -> ${city}: Unrecognized Aggregation "${row["Aggregation"]}"`,
+            );
+          }
+
+          if (
+            f === currentFocus.toLowerCase() &&
+            a === targetAgg.toLowerCase()
+          ) {
+            filtered.push(row);
+          }
+        });
+
+        const seenCities = new Set();
+        filtered = filtered.filter((row) => {
+          const cityKey =
+            row["City/municipality"] + "|" + row["State/ Country"];
+          if (seenCities.has(cityKey)) return false;
+          seenCities.add(cityKey);
+          return true;
+        });
+
+        const processed = [];
+        filtered.forEach((row) => {
+          const city = row["City/municipality"];
+          const baseCityKey = city + "|" + row["State/ Country"];
+          const focus = (row["Focus"] || "").trim().toLowerCase();
+
+          // 2. LOOK IT UP USING THAT SAME STRICT KEY
+          const strictKey = baseCityKey + "|" + focus;
+
+          let pop = cleanNum(row["Population"], false);
+
+          if (isNaN(pop) && popMap[baseCityKey]) pop = popMap[baseCityKey];
+
+          if (pop < minPopVal) return;
+
+          const formattedLoc = formatLocation(row["State/ Country"]);
+          const finalLoc = getHardcodedRegion(
+            row["City/municipality"],
+            formattedLoc,
+          );
+          let region = row["Continent"]
+            ? row["Continent"].trim()
+            : getRegion(finalLoc);
+          if (region === "NA") region = "North America";
+          if (region === "EU") region = "Europe";
+
+          if (regionFilter !== "All" && region !== regionFilter) return;
+
+          // when processing a 'Best Area' row, ensuring metrics match across the UI.
+          let avgScore, disparity, bestAreaScore;
+          const safeRow = { ...row }; // Shallow copy so we don't mutate the raw data in memory
+          const isCityWide =
+            (row["Aggregation"] || "").trim().toLowerCase() === "city wide";
+
+          if (!isCityWide && cwDataMap[strictKey]) {
+            const cwRow = cwDataMap[strictKey];
+            // Pull the true City Wide average from the parent row
+            avgScore = cleanNum(cwRow["Average Score"], false) || 0;
+            disparity = cleanNum(cwRow["Disparity"], false) || 0;
+
+            // The Best Area score is physically in the current row's 'Average Score' cell
+            bestAreaScore =
+              cleanNum(row["Average Score"], false) || avgScore + disparity;
+
+            // Inject the correct highest point from the parent row so createCard reads it correctly
+            safeRow["Highest Point"] = cwRow["Highest Point"];
+            // SYNC FOCUS DISPARITY SO THE TOOLTIP TEXT STAYS IDENTICAL
+            safeRow["Focus Disparity"] = cwRow["Focus Disparity"];
+          } else {
+            avgScore = cleanNum(row["Average Score"], false) || 0;
+            disparity = cleanNum(row["Disparity"], false) || 0;
+            bestAreaScore = avgScore + disparity;
+          }
+
+          let targetScore =
+            targetAgg.toLowerCase() === "best area" ? bestAreaScore : avgScore;
+          if (targetScore < minScoreVal) return;
+
+          const AccuracyScore = parseFloat(row["Accuracy Score"]);
+          if (!includeLowAcc && !isNaN(AccuracyScore) && AccuracyScore < 10)
+            return;
+
+          const isSubdivision =
+            (row["Subdivision"] || "").trim().toLowerCase() === "yes";
+          if (!includeSubdivisions && isSubdivision) {
+            return;
+          }
+
+          const focusDisparity = cleanNum(safeRow["Focus Disparity"], false);
+
+          processed.push({
+            city: city,
+            state: finalLoc,
+            pop: pop,
+            avgScore: avgScore,
+            disparity: disparity,
+            bestAreaScore: bestAreaScore,
+            focusDisparity: focusDisparity,
+            region: region,
+            raw: safeRow,
+          });
+        });
+        return processed;
+      }
+
+      function updateView() {
+        if (rawData.length === 0) return;
+        if (currentView === "graph") updatePlot();
+        else if (currentView === "map") updateMap();
+        else updateList();
+      }
+
+      function updateMap() {
+        const mapLevel = document.getElementById("mapLevel").value;
+        const aggMode = document.getElementById("aggFilter").value;
+        const focusLabel =
+          currentFocus === "Balanced" ? "" : ` (${currentFocus} Focus)`;
+
+        const isColorblind = document.getElementById("colorblindMode")
+          ? document.getElementById("colorblindMode").checked
+          : false;
+        const activeColorScale = isColorblind ? "Cividis" : CUSTOM_COLORSCALE;
+
+        let defaultTitle =
+          mapLevel === "City"
+            ? `City "${aggMode}" Bike Friendliness Scores${focusLabel}`
+            : mapLevel === "Country"
+              ? `Highest "${aggMode}" Bike Friendliness Score by Country${focusLabel}`
+              : `Highest "${aggMode}" Bike Friendliness Score By Country/Region${focusLabel}`;
+
+        let displayTitle = userEditedMapTitle ? customMapTitle : defaultTitle;
+
+        if (currentView === "map") {
+          document.getElementById("graphTitle").value = displayTitle;
+        }
+
+        const baseData = processDataForList("City Wide");
+        const targetData =
+          aggMode === "Best Area" ? processDataForList("Best Area") : baseData;
+
+        const data = targetData;
+        document.getElementById("cityCountDisplay").textContent =
+          `${data.length} Cities`;
+        
+		const isPhone = window.innerWidth <= 600;
+
+		const plotConfig = {
+		  responsive: true,
+		  scrollZoom: !isPhone,
+		  displaylogo: false,
+		  displayModeBar: "hover",
+		  modeBarButtonsToRemove: [
+		    "lasso2d",
+		    "select2d",
+		    "pan2d",
+		    "toImage",
+		  ],
+		};
+
+        const getScore = (d) => {
+          if (aggMode === "Highest Point")
+            return parseFloat(d.raw["Highest Point"]) || 0;
+          if (aggMode === "City Wide") return d.avgScore;
+          return d.bestAreaScore;
+        };
+
+        const mapWatermark = {
+          text: "bikefriendlinessindex.org",
+          xref: "paper",
+          yref: "paper",
+          x: 0.96,
+          y: 0.01,
+          xanchor: "right",
+          yanchor: "bottom",
+          showarrow: false,
+          font: {
+            color: "rgba(10, 10, 10, 0.8)",
+            size: 14,
+            family: "Inter, sans-serif",
+          },
+          bgcolor: "#cce0ff",
+          bordercolor: "rgba(200, 200, 200, 0.4)",
+          borderwidth: 1,
+          borderpad: 5,
+        };
+
+        data.sort((a, b) => getScore(a) - getScore(b));
+
+        if (mapLevel === "City") {
+          const lats = [],
+            lons = [],
+            sizes = [],
+            colors = [],
+            customdata = [],
+            texts = [];
+          data.forEach((d) => {
+            let lat = parseFloat(
+              d.raw["Latitude"] || d.raw["latitude"] || d.raw["lat"],
+            );
+            let lon = parseFloat(
+              d.raw["Longitude"] || d.raw["longitude"] || d.raw["lon"],
+            );
+
+            if (!isNaN(lat) && !isNaN(lon)) {
+              lats.push(lat);
+              lons.push(lon);
+              sizes.push(Math.pow(d.pop, 0.25) / 4 + 4);
+
+              let score = getScore(d);
+              colors.push(score);
+              texts.push(d.city);
+
+              let accuracyText = "";
+              if (parseFloat(d.raw["Accuracy Score"]) < 10) {
+                accuracyText = "<br><i>[Lower Accuracy Data]</i>";
+              }
+
+              let disp = Math.round(d.focusDisparity || 0);
+              let biasText = "Balanced Scoring";
+              if (disp >= 11) biasText = "Way more score from infrastructure";
+              else if (disp >= 6) biasText = "More score from infrastructure";
+              else if (disp >= 2)
+                biasText = "Slightly more score from infrastructure";
+              else if (disp <= -11)
+                biasText = "Way more score from destinations";
+              else if (disp <= -6) biasText = "More score from destinations";
+              else if (disp <= -2)
+                biasText = "Slightly more score from destinations";
+
+              customdata.push([
+                formatPop(d.pop),
+                Math.round(d.avgScore),
+                Math.round(d.bestAreaScore),
+                biasText,
+                Math.round(parseFloat(d.raw["Highest Point"]) || 0),
+                getFullLocationDisplay(d.state),
+                accuracyText,
+              ]);
+            } else {
+              console.warn(
+                `Map Coordinates Drop -> ${d.city}, ${d.state}: No coordinates found in CSV (Latitude/Longitude)!`,
+              );
+            }
+          });
+
+          Plotly.react(
+            "map-container",
+            [
+              {
+                type: "scattergeo",
+                mode: "markers",
+                lat: lats,
+                lon: lons,
+                text: texts,
+                customdata: customdata,
+                marker: {
+                  size: sizes,
+                  color: colors,
+                  colorscale: activeColorScale,
+                  cmin: 0,
+                  cmax: 100,
+                  colorbar: {
+                    title: { text: aggMode + "<br>Score" },
+                    x: 1.01,
+                    xanchor: "left",
+                    y: 0.5,
+                    yanchor: "middle",
+                    len: 0.8,
+                    thicknessmode: "fraction",
+                    thickness: 0.025,
+                  },
+                  line: { color: "black", width: 0.5 },
+                  opacity: 0.9,
+                },
+                hovertemplate:
+                  "<b>%{text}</b><br>" +
+                  "%{customdata[5]}%{customdata[6]}<br><br>" +
+                  "Pop: %{customdata[0]}<br>" +
+                  "City Score: %{customdata[1]}<br>" +
+                  "Best Area: %{customdata[2]}<br>" +
+                  "Highest Point: %{customdata[4]}<br>" +
+                  "%{customdata[3]}<extra></extra>",
+              },
+            ],
+            {
+              title: { text: `<b>${displayTitle}</b>` },
+              annotations: [mapWatermark],
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              uirevision: "true",
+              hovermode: "closest",
+              hoverdistance: 50,
+              dragmode: "pan",
+              geo: {
+                domain: { x: [0, 1] },
+                scope: "world",
+                projection: { type: "natural earth", scale: currentMapScale },
+                bgcolor: "rgba(0,0,0,0)",
+                showland: true,
+                landcolor: "lightgray",
+                showocean: true,
+                oceancolor: "lightblue",
+                showlakes: true,
+                lakecolor: "lightblue",
+                showcountries: true,
+                countrycolor: "#888",
+                countrywidth: 1,
+                showsubunits: true,
+                subunitcolor: "#ccc",
+                subunitwidth: 0.5,
+              },
+              margin: { l: 0, r: 75, t: 50, b: 20 },
+			  updatemenus: getColorblindUpdatemenu("map"),
+            },
+            plotConfig,
+		).then(() => {
+		  attachColorblindPlotlyButton("map-container");
+		});
+        } else {
+          const worldAgg = {};
+          const usAgg = {};
+          const canAgg = {};
+          const ausAgg = {};
+          const braAgg = {};
+          const mexAgg = {};
+          const gerAgg = {};
+          const fraAgg = {};
+          const itaAgg = {};
+          const ukAgg = {};
+          const chnAgg = {};
+          const edgeAgg = {};
+
+          const CAN_NAMES = {
+            AB: "Alberta",
+            BC: "British Columbia",
+            MB: "Manitoba",
+            NB: "New Brunswick",
+            NL: "Newfoundland and Labrador",
+            NT: "Northwest Territories",
+            NS: "Nova Scotia",
+            NU: "Nunavut",
+            ON: "Ontario",
+            PE: "Prince Edward Island",
+            QC: "Quebec",
+            SK: "Saskatchewan",
+            YT: "Yukon Territory",
+          };
+          const AUS_NAMES = {
+            NSW: "New South Wales",
+            VIC: "Victoria",
+            QLD: "Queensland",
+            "WA(AU)": "Western Australia",
+            SA: "South Australia",
+            TAS: "Tasmania",
+            ACT: "Australian Capital Territory",
+            "NT(AU)": "Northern Territory",
+          };
+
+          data.forEach((d) => {
+            const country = getCountryName(d.state);
+            const cleanCountry = country.trim().toUpperCase();
+
+            const score = getScore(d);
+            const highestPoint = parseFloat(d.raw["Highest Point"]) || 0;
+
+            const aggObj = {
+              score: Math.round(score),
+              bestCity: d.city,
+              bestCityScore: Math.round(d.avgScore),
+              bestAreaScore: Math.round(d.bestAreaScore),
+              highestPoint: Math.round(highestPoint),
+              isLowAcc: parseFloat(d.raw["Accuracy Score"]) < 10,
+            };
+
+            if (cleanCountry === "KOSOVO") {
+              if (!edgeAgg["Kosovo"] || score > edgeAgg["Kosovo"].score)
+                edgeAgg["Kosovo"] = aggObj;
+            } else if (cleanCountry === "SOMALILAND") {
+              if (!edgeAgg["Somaliland"] || score > edgeAgg["Somaliland"].score)
+                edgeAgg["Somaliland"] = aggObj;
+            } else if (
+              mapLevel === "State" &&
+              [
+                "UNITED STATES",
+                "CANADA",
+                "AUSTRALIA",
+                "BRAZIL",
+                "MEXICO",
+                "GERMANY",
+                "FRANCE",
+                "ITALY",
+                "UNITED KINGDOM",
+                "CHINA",
+              ].includes(cleanCountry)
+            ) {
+              // Sub-regions captured in state aggregations
+            } else {
+              if (!worldAgg[country] || score > worldAgg[country].score) {
+                worldAgg[country] = aggObj;
+              }
+            }
+
+            if (mapLevel === "State") {
+              if (cleanCountry === "UNITED STATES" && d.state.length === 2) {
+                if (!usAgg[d.state] || score > usAgg[d.state].score)
+                  usAgg[d.state] = aggObj;
+              } else if (cleanCountry === "CANADA") {
+                const fullName = CAN_NAMES[d.state] || d.state;
+                if (!canAgg[fullName] || score > canAgg[fullName].score)
+                  canAgg[fullName] = aggObj;
+              } else if (cleanCountry === "AUSTRALIA") {
+                const fullName = AUS_NAMES[d.state] || d.state;
+                if (!ausAgg[fullName] || score > ausAgg[fullName].score)
+                  ausAgg[fullName] = aggObj;
+              } else if (cleanCountry === "BRAZIL") {
+                if (!braAgg[d.state] || score > braAgg[d.state].score)
+                  braAgg[d.state] = aggObj;
+              } else if (cleanCountry === "MEXICO") {
+                if (!mexAgg[d.state] || score > mexAgg[d.state].score)
+                  mexAgg[d.state] = aggObj;
+              } else if (cleanCountry === "GERMANY") {
+                if (!gerAgg[d.state] || score > gerAgg[d.state].score)
+                  gerAgg[d.state] = aggObj;
+              } else if (cleanCountry === "FRANCE") {
+                if (!fraAgg[d.state] || score > fraAgg[d.state].score)
+                  fraAgg[d.state] = aggObj;
+              } else if (cleanCountry === "ITALY") {
+                if (!itaAgg[d.state] || score > itaAgg[d.state].score)
+                  itaAgg[d.state] = aggObj;
+              } else if (cleanCountry === "UNITED KINGDOM") {
+                if (!ukAgg[d.state] || score > ukAgg[d.state].score)
+                  ukAgg[d.state] = aggObj;
+              } else if (cleanCountry === "CHINA") {
+                if (!chnAgg[d.state] || score > chnAgg[d.state].score)
+                  chnAgg[d.state] = aggObj;
+              }
+            }
+          });
+
+          const traces = [];
+
+          const worldLocs = Object.keys(worldAgg);
+          if (worldLocs.length > 0) {
+            traces.push({
+              type: "choropleth",
+              locationmode: "country names",
+              locations: worldLocs,
+              z: worldLocs.map((k) => worldAgg[k].score),
+              customdata: worldLocs.map((k) => {
+                let accText = worldAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  worldAgg[k].bestCity,
+                  worldAgg[k].bestCityScore,
+                  worldAgg[k].bestAreaScore,
+                  worldAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: worldLocs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              colorbar: {
+                title: { text: aggMode + "<br>Score" },
+                x: 1.01,
+                xanchor: "left",
+                y: 0.5,
+                yanchor: "middle",
+                len: 0.8,
+                thicknessmode: "fraction",
+                thickness: 0.025,
+              },
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(usAgg).length > 0) {
+            const usLocs = Object.keys(usAgg);
+             traces.push({
+				type: "choropleth",
+
+				// Changed from Plotly's built-in USA-states mode to your own fixed GeoJSON.
+				locationmode: "geojson-id",
+				geojson: "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/US_States_3.geojson",
+				featureidkey: "properties.postal",
+
+				locations: usLocs,
+				z: usLocs.map((k) => usAgg[k].score),
+				customdata: usLocs.map((k) => {
+				  let accText = usAgg[k].isLowAcc
+					? "<br><i>[Lower Accuracy Data]</i>"
+					: "";
+				  return [
+					usAgg[k].bestCity,
+					usAgg[k].bestCityScore,
+					usAgg[k].bestAreaScore,
+					usAgg[k].highestPoint,
+					accText,
+				  ];
+				}),
+              text: usLocs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(canAgg).length > 0) {
+            const canLocs = Object.keys(canAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Canada_Boundaries_3.geojson",
+              locations: canLocs,
+              featureidkey: "properties.name",
+              z: canLocs.map((k) => canAgg[k].score),
+              customdata: canLocs.map((k) => {
+                let accText = canAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  canAgg[k].bestCity,
+                  canAgg[k].bestCityScore,
+                  canAgg[k].bestAreaScore,
+                  canAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: canLocs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(ausAgg).length > 0) {
+            const ausLocs = Object.keys(ausAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Australia_Boundaries_3.geojson",
+              locations: ausLocs,
+              featureidkey: "properties.STATE_NAME",
+              z: ausLocs.map((k) => ausAgg[k].score),
+              customdata: ausLocs.map((k) => {
+                let accText = ausAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  ausAgg[k].bestCity,
+                  ausAgg[k].bestCityScore,
+                  ausAgg[k].bestAreaScore,
+                  ausAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: ausLocs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(braAgg).length > 0) {
+            const locs = Object.keys(braAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Brazil_Boundaries_3.geojson",
+              locations: locs.map((k) => {
+                if (k === "Santa Catarina") return "SC";
+                if (k === "Pernambuco") return "PE";
+                if (k === "Pará" || k === "Para") return "PA";
+                if (k === "Maranhão" || k === "Maranhao") return "MA";
+                if (k === "Alagoas") return "AL";
+				if (k === "Mato Grosso") return "MT";
+				if (k === "Mato Grosso do Sul") return "MS";
+                return k;
+              }),
+              featureidkey: "properties.sigla",
+              z: locs.map((k) => braAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = braAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  braAgg[k].bestCity,
+                  braAgg[k].bestCityScore,
+                  braAgg[k].bestAreaScore,
+                  braAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(mexAgg).length > 0) {
+            const locs = Object.keys(mexAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Mexico_Boundaries_3.geojson",
+              locations: locs,
+              featureidkey: "properties.name",
+              z: locs.map((k) => mexAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = mexAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  mexAgg[k].bestCity,
+                  mexAgg[k].bestCityScore,
+                  mexAgg[k].bestAreaScore,
+                  mexAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(gerAgg).length > 0) {
+            const locs = Object.keys(gerAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Germany_Boundaries_3.geojson",
+              locations: locs,
+              featureidkey: "properties.name",
+              z: locs.map((k) => gerAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = gerAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  gerAgg[k].bestCity,
+                  gerAgg[k].bestCityScore,
+                  gerAgg[k].bestAreaScore,
+                  gerAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(fraAgg).length > 0) {
+            const locs = Object.keys(fraAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/France_Boundaries_3.geojson",
+              locations: locs,
+              featureidkey: "properties.nom",
+              z: locs.map((k) => fraAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = fraAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  fraAgg[k].bestCity,
+                  fraAgg[k].bestCityScore,
+                  fraAgg[k].bestAreaScore,
+                  fraAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(itaAgg).length > 0) {
+            const locs = Object.keys(itaAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/Italy_Boundaries_3.geojson",
+              locations: locs,
+              featureidkey: "properties.reg_name",
+              z: locs.map((k) => itaAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = itaAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  itaAgg[k].bestCity,
+                  itaAgg[k].bestCityScore,
+                  itaAgg[k].bestAreaScore,
+                  itaAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(ukAgg).length > 0) {
+            const locs = Object.keys(ukAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/UK_Boundaries.geojson",
+              locations: locs,
+              featureidkey: "properties.ITL121NM",
+              z: locs.map((k) => ukAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = ukAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  ukAgg[k].bestCity,
+                  ukAgg[k].bestCityScore,
+                  ukAgg[k].bestAreaScore,
+                  ukAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (mapLevel === "State" && Object.keys(chnAgg).length > 0) {
+            const locs = Object.keys(chnAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/China_Boundaries_3.geojson",
+              locations: locs,
+              featureidkey: "properties.name",
+              z: locs.map((k) => chnAgg[k].score),
+              customdata: locs.map((k) => {
+                let accText = chnAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  chnAgg[k].bestCity,
+                  chnAgg[k].bestCityScore,
+                  chnAgg[k].bestAreaScore,
+                  chnAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: locs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          if (Object.keys(edgeAgg).length > 0) {
+            const edgeLocs = Object.keys(edgeAgg);
+            traces.push({
+              type: "choropleth",
+              locationmode: "geojson-id",
+              geojson:
+                "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/World_Boundaries_3.geojson",
+              locations: edgeLocs,
+              featureidkey: "properties.name",
+              z: edgeLocs.map((k) => edgeAgg[k].score),
+              customdata: edgeLocs.map((k) => {
+                let accText = edgeAgg[k].isLowAcc
+                  ? "<br><i>[Lower Accuracy Data]</i>"
+                  : "";
+                return [
+                  edgeAgg[k].bestCity,
+                  edgeAgg[k].bestCityScore,
+                  edgeAgg[k].bestAreaScore,
+                  edgeAgg[k].highestPoint,
+                  accText,
+                ];
+              }),
+              text: edgeLocs.map((k) => getFullLocationDisplay(k)),
+              colorscale: activeColorScale,
+              zmin: 0,
+              zmax: 100,
+              marker: { line: { color: "rgb(255,255,255)", width: .5 } },
+              showscale: false,
+              hovertemplate:
+                "<b>%{text}</b>%{customdata[4]}<br><br>Best City: %{customdata[0]}<br>City Score: %{customdata[1]}<br>Best Area: %{customdata[2]}<br>Highest Point: %{customdata[3]}<extra></extra>",
+            });
+          }
+
+          Plotly.react(
+            "map-container",
+            traces,
+            {
+              title: { text: `<b>${displayTitle}</b>` },
+              annotations: [mapWatermark],
+              uirevision: "true",
+              paper_bgcolor: "rgba(0,0,0,0)",
+              plot_bgcolor: "rgba(0,0,0,0)",
+              hovermode: "closest",
+              hoverdistance: 50,
+              dragmode: "pan",
+              geo: {
+                domain: { x: [0, 1] },
+                scope: "world",
+                projection: { type: "natural earth", scale: currentMapScale },
+                bgcolor: "rgba(0,0,0,0)",
+                showland: true,
+                landcolor: "lightgray",
+                showocean: true,
+                oceancolor: "lightblue",
+                showlakes: true,
+                lakecolor: "lightblue",
+              },
+              margin: { l: 0, r: 75, t: 50, b: 20 },
+              updatemenus: getColorblindUpdatemenu("map"),
+		  },
+		  plotConfig,
+		).then(() => {
+		  attachColorblindPlotlyButton("map-container");
+		});
+        }
+
+        attachMapLock();
+      }
+
+      function attachMapLock() {
+		  const mapDiv = document.getElementById("map-container");
+
+		  if (mapDiv._hasRelayoutListener) return;
+
+		  let lockTimeout;
+		  let applyingMapLock = false;
+
+		  function getMaxAllowedLat(scale) {
+			if (scale <= 1.25) return 55; // world view: keep it tidy
+			if (scale <= 2) return 65;
+			if (scale <= 4) return 75;
+			return 82; // zoomed in: allow Nordics, Canada, Patagonia, etc.
+		  }
+
+		  mapDiv.on("plotly_relayout", function (eventData) {
+			if (applyingMapLock) return;
+
+			clearTimeout(lockTimeout);
+
+			lockTimeout = setTimeout(() => {
+			  let update = {};
+			  let needsUpdate = false;
+
+			  let activeScale =
+				eventData["geo.projection.scale"] ??
+				mapDiv.layout?.geo?.projection?.scale ??
+				currentMapScale ??
+				1;
+
+			  if (eventData["geo.projection.scale"] !== undefined) {
+				let newScale = eventData["geo.projection.scale"];
+
+				if (newScale < 1) {
+				  update["geo.projection.scale"] = 1;
+				  activeScale = 1;
+				  needsUpdate = true;
+				} else if (newScale > 150) {
+				  update["geo.projection.scale"] = 150;
+				  activeScale = 150;
+				  needsUpdate = true;
+				} else {
+				  activeScale = newScale;
+				}
+
+				currentMapScale = activeScale;
+			  }
+
+			  if (eventData["geo.center.lat"] !== undefined) {
+				let newLat = eventData["geo.center.lat"];
+				const maxLat = getMaxAllowedLat(activeScale);
+
+				if (newLat > maxLat) {
+				  update["geo.center.lat"] = maxLat;
+				  needsUpdate = true;
+				} else if (newLat < -maxLat) {
+				  update["geo.center.lat"] = -maxLat;
+				  needsUpdate = true;
+				}
+			  }
+
+			  if (needsUpdate) {
+				applyingMapLock = true;
+				Plotly.relayout(mapDiv, update).finally(() => {
+				  applyingMapLock = false;
+				});
+			  }
+			}, 250);
+		  });
+
+		  mapDiv._hasRelayoutListener = true;
+		}
+		
+		
+		function getGraphLabelText(d, allData) {
+		  const cityName = d.city.trim().toLowerCase();
+
+		  const duplicateCity =
+			allData.filter((x) => x.city && x.city.trim().toLowerCase() === cityName)
+			  .length > 1;
+
+		  if (!duplicateCity) return d.city;
+
+		  const country = getCountryName(d.state);
+
+		  if (country === "United States") {
+			const state = getDisplayName(d.state);
+
+			if (!state || state.toLowerCase() === cityName) {
+			  return d.city;
+			}
+
+			return `${d.city}, ${state}`;
+		  }
+
+		  if (!country || country.toLowerCase() === cityName) {
+			return d.city;
+		  }
+
+		  return `${d.city}, ${country}`;
+		}
+
+		function estimateGraphLabelBox(text, x, y, xshift, yshift, visibleRange = null) {
+		  const chartDiv = document.getElementById("chart-container");
+
+		  const xSpan = visibleRange
+			? visibleRange.xMax - visibleRange.xMin
+			: 105 - 24;
+
+		  const ySpan = visibleRange
+			? visibleRange.yMax - visibleRange.yMin
+			: 105 - 24;
+
+		  const plotWidth =
+			chartDiv?._fullLayout?.xaxis?._length ||
+			chartDiv?.clientWidth ||
+			1000;
+
+		  const plotHeight =
+			chartDiv?._fullLayout?.yaxis?._length ||
+			chartDiv?.clientHeight ||
+			700;
+
+		  const xUnitsPerPixel = xSpan / plotWidth;
+		  const yUnitsPerPixel = ySpan / plotHeight;
+
+		  // Approximate text size in pixels, then convert to graph/data units.
+		  const textWidthPx = Math.max(36, text.length * 6.4);
+		  const textHeightPx = 18;
+
+		  const shiftedX = x + xshift * xUnitsPerPixel;
+		  const shiftedY = y + yshift * yUnitsPerPixel;
+
+		  const width = textWidthPx * xUnitsPerPixel;
+		  const height = textHeightPx * yUnitsPerPixel;
+
+		  return {
+			left: shiftedX - width / 2,
+			right: shiftedX + width / 2,
+			top: shiftedY + height / 2,
+			bottom: shiftedY - height / 2,
+		  };
+		}
+
+		function graphLabelBoxesOverlap(a, b) {
+		  return !(
+			a.right < b.left ||
+			a.left > b.right ||
+			a.top < b.bottom ||
+			a.bottom > b.top
+		  );
+		}
+		
+		function graphLabelBoxFitsInRange(box, visibleRange) {
+		  if (!visibleRange) return true;
+
+		  const xSpan = visibleRange.xMax - visibleRange.xMin;
+		  const ySpan = visibleRange.yMax - visibleRange.yMin;
+
+		  // Small padding keeps labels away from the plot edge,
+		  // but scales with zoom so it doesn't nuke labels when zoomed in.
+		  const xPad = xSpan * 0.015;
+		  const yPad = ySpan * 0.025;
+
+		  return (
+			box.left >= visibleRange.xMin + xPad &&
+			box.right <= visibleRange.xMax - xPad &&
+			box.bottom >= visibleRange.yMin + yPad &&
+			box.top <= visibleRange.yMax - yPad
+		  );
+		}
+
+		function buildGraphLabelAnnotations(allData, visibleRange = null) {
+		  if (currentLabelMode === "None") return [];
+
+		  let labelData = [...allData];
+			if (visibleRange) {
+			  labelData = labelData.filter((d) => {
+				return (
+				  d.avgScore >= visibleRange.xMin &&
+				  d.avgScore <= visibleRange.xMax &&
+				  d.bestAreaScore >= visibleRange.yMin &&
+				  d.bestAreaScore <= visibleRange.yMax
+				);
+			  });
+			}
+		  if (currentLabelMode === "Pop") {
+			labelData.sort((a, b) => b.pop - a.pop);
+		  } else if (currentLabelMode === "Score") {
+			labelData.sort((a, b) => b.bestAreaScore - a.bestAreaScore);
+		  }
+
+		  labelData = labelData.slice(0, 25);
+
+		  const placedBoxes = [];
+		  const annotations = [];
+
+		  const candidatePositions = [
+			  { xshift: 18, yshift: 0, xanchor: "left", yanchor: "middle" },
+			  { xshift: -18, yshift: 0, xanchor: "right", yanchor: "middle" },
+			  { xshift: 0, yshift: -18, xanchor: "center", yanchor: "top" },
+			  { xshift: 0, yshift: 14, xanchor: "center", yanchor: "bottom" },
+			  { xshift: 20, yshift: -14, xanchor: "left", yanchor: "top" },
+			  { xshift: -20, yshift: -14, xanchor: "right", yanchor: "top" },
+			  { xshift: 20, yshift: 14, xanchor: "left", yanchor: "bottom" },
+			  { xshift: -20, yshift: 14, xanchor: "right", yanchor: "bottom" },
+			];
+
+		  labelData.forEach((d) => {
+			const text = getGraphLabelText(d, allData);
+
+			let chosenPosition = null;
+			let chosenBox = null;
+
+			for (const position of candidatePositions) {
+			  const box = estimateGraphLabelBox(
+				text,
+				d.avgScore,
+				d.bestAreaScore,
+				position.xshift,
+				position.yshift,
+				visibleRange,
+			  );
+
+			  const overlapsExistingLabel = placedBoxes.some((existingBox) =>
+				graphLabelBoxesOverlap(box, existingBox),
+			  );
+				
+				const fitsInsideGraph = graphLabelBoxFitsInRange(box, visibleRange);
+				
+			  if (!overlapsExistingLabel) {
+				chosenPosition = position;
+				chosenBox = box;
+				break;
+			  }
+			}
+
+			// Skip the label if every candidate position would overlap.
+			if (!chosenPosition) return;
+
+			placedBoxes.push(chosenBox);
+
+			annotations.push({
+			  x: d.avgScore,
+			  y: d.bestAreaScore,
+			  text,
+			  showarrow: true,
+			  arrowhead: 0,
+			  arrowwidth: 0.8,
+			  arrowcolor: "rgba(60, 60, 60, 0.45)",
+
+			  xshift: chosenPosition.xshift,
+			  yshift: chosenPosition.yshift,
+			  xanchor: chosenPosition.xanchor,
+			  yanchor: chosenPosition.yanchor,
+
+			  ax: -chosenPosition.xshift,
+			  ay: -chosenPosition.yshift,
+
+			  font: {
+				size: 11,
+				color: "#222",
+				family: "Inter, sans-serif",
+			  },
+			  bgcolor: "rgba(255, 255, 255, 0.82)",
+			  bordercolor: "rgba(120, 120, 120, 0.25)",
+			  borderwidth: 1,
+			  borderpad: 3,
+			});
+		  });
+
+		  return annotations;
+		}
+		
+		
+		let graphLabelRelayoutInProgress = false;
+
+		function attachGraphRelayoutLabelUpdater(allData) {
+		  const chartDiv = document.getElementById("chart-container");
+		  if (!chartDiv) return;
+
+		  if (chartDiv.removeAllListeners) {
+			chartDiv.removeAllListeners("plotly_relayout");
+		  }
+
+		  chartDiv.on("plotly_relayout", () => {
+			if (graphLabelRelayoutInProgress) return;
+			if (currentView !== "graph") return;
+			if (currentLabelMode === "None") return;
+			if (!chartDiv.layout?.xaxis?.range || !chartDiv.layout?.yaxis?.range) return;
+
+			const xRange = chartDiv.layout.xaxis.range;
+			const yRange = chartDiv.layout.yaxis.range;
+
+			const visibleRange = {
+			  xMin: Math.min(xRange[0], xRange[1]),
+			  xMax: Math.max(xRange[0], xRange[1]),
+			  yMin: Math.min(yRange[0], yRange[1]),
+			  yMax: Math.max(yRange[0], yRange[1]),
+			};
+
+			const annotations = buildGraphLabelAnnotations(allData, visibleRange);
+			annotations.push(getGraphWatermarkAnnotation());
+
+			graphLabelRelayoutInProgress = true;
+
+			Plotly.relayout(chartDiv, { annotations })
+			  .then(() => {
+				graphLabelRelayoutInProgress = false;
+			  })
+			  .catch(() => {
+				graphLabelRelayoutInProgress = false;
+			  });
+		  });
+		}
+		
+		function getColorblindButtonLabel() {
+		  const isOn = document.getElementById("colorblindMode")?.checked;
+
+		  // Plotly updatemenu multiline labels are left-biased.
+		  // The nbsp padding is the simple, non-cursed way to visually center "Mode".
+		  const modePadding = isOn
+			? "&nbsp;&nbsp;&nbsp;&nbsp;"
+			: "&nbsp;&nbsp;&nbsp;";
+
+		  return isOn
+			? `✓ Colorblind<br>${modePadding}Mode`
+			: `Colorblind<br>${modePadding}Mode`;
+		}
+
+		function getColorblindUpdatemenu(viewType) {
+		  const isMap = viewType === "map";
+
+		  return [
+			{
+			  type: "buttons",
+			  direction: "left",
+
+			  // Graph needs more x because its colorbar is farther right.
+			  // Map usually needs less x because its right margin is tighter.
+			  x: isMap ? 1.035 : 1.075,
+			  xanchor: "center",
+
+			  // Under the colorbar.
+			  y: isMap ? 0.06 : 0.08,
+			  yanchor: "middle",
+
+			  showactive: false,
+			  active: -1,
+
+			  bgcolor: "rgba(255, 255, 255, 0.95)",
+			  bordercolor: "#80b0ff",
+			  borderwidth: 1,
+			  pad: { t: 2, r: 5, b: 2, l: 5 },
+			  font: { size: 10 },
+
+			  buttons: [
+				{
+				  name: "toggleColorblindMode",
+				  label: getColorblindButtonLabel(),
+				  method: "relayout",
+				  args: [{}],
+				  execute: false,
+				},
+			  ],
+			},
+		  ];
+		}
+
+		function attachColorblindPlotlyButton(plotId) {
+		  const plotDiv = document.getElementById(plotId);
+		  if (!plotDiv || !plotDiv.on) return;
+
+		  // Prevent duplicate click listeners every redraw.
+		  if (plotDiv.dataset.colorblindButtonAttached === "true") return;
+		  plotDiv.dataset.colorblindButtonAttached = "true";
+
+		  plotDiv.on("plotly_buttonclicked", (eventData) => {
+			if (eventData?.button?.name !== "toggleColorblindMode") return;
+
+			const checkbox = document.getElementById("colorblindMode");
+			if (!checkbox) return;
+
+			checkbox.checked = !checkbox.checked;
+			updateView();
+		  });
+		}
+		
+		function attachGraphColorblindButton() {
+		  const chartDiv = document.getElementById("chart-container");
+		  if (!chartDiv || !chartDiv.on) return;
+
+		  // Prevent stacking duplicate listeners every time updateView() redraws.
+		  if (chartDiv.dataset.colorblindButtonAttached === "true") return;
+		  chartDiv.dataset.colorblindButtonAttached = "true";
+
+		  chartDiv.on("plotly_buttonclicked", (eventData) => {
+			if (eventData?.button?.name !== "toggleColorblindMode") return;
+
+			const checkbox = document.getElementById("colorblindMode");
+			if (!checkbox) return;
+
+			checkbox.checked = !checkbox.checked;
+			updateView();
+		  });
+		}
+
+		function getGraphWatermarkAnnotation() {
+		  return {
+			text: "bikefriendlinessindex.org",
+			xref: "paper",
+			yref: "paper",
+			x: 0.99,
+			y: 0.02,
+			xanchor: "right",
+			yanchor: "bottom",
+			showarrow: false,
+			font: {
+			  color: "rgba(10, 10, 10, 0.6)",
+			  size: 14,
+			  family: "Inter, sans-serif",
+			},
+			bgcolor: "rgba(255, 255, 255, 0.85)",
+			bordercolor: "rgba(200, 200, 200, 0.4)",
+			borderwidth: 1,
+			borderpad: 5,
+		  };
+		}
+		
+		function getCurrentGraphVisibleRange() {
+		  const chartDiv = document.getElementById("chart-container");
+
+		  if (
+			chartDiv &&
+			chartDiv.layout &&
+			chartDiv.layout.xaxis &&
+			chartDiv.layout.yaxis &&
+			chartDiv.layout.xaxis.range &&
+			chartDiv.layout.yaxis.range
+		  ) {
+			const xRange = chartDiv.layout.xaxis.range;
+			const yRange = chartDiv.layout.yaxis.range;
+
+			return {
+			  xMin: Math.min(xRange[0], xRange[1]),
+			  xMax: Math.max(xRange[0], xRange[1]),
+			  yMin: Math.min(yRange[0], yRange[1]),
+			  yMax: Math.max(yRange[0], yRange[1]),
+			};
+		  }
+
+		  return {
+			xMin: 24,
+			xMax: 105,
+			yMin: 24,
+			yMax: 105,
+		  };
+		}
+
+
+      // --- GRAPH & LIST UPDATE FUNCTIONS ---
+      function updatePlot() {
+        let allData = processDataForGraph();
+        document.getElementById("cityCountDisplay").textContent =
+          `${allData.length} Cities`;
+
+        const forceCircle = document.getElementById("forceCircle").checked;
+
+        const isColorblind = document.getElementById("colorblindMode")
+          ? document.getElementById("colorblindMode").checked
+          : false;
+        const activeFocusScale = isColorblind
+          ? [
+              [0, "#d95f02"],
+              [0.5, "gray"],
+              [1, "#5e3c99"],
+            ]
+          : [
+              [0, "blue"],
+              [0.5, "gray"],
+              [1, "green"],
+            ];
+
+        let defaultTitle = "City Bike Performance: Avg Score vs Best Area";
+        let displayTitle = userEditedGraphTitle
+          ? customGraphTitle
+          : defaultTitle;
+
+        // Sync the input box so it displays the correct graph title when you switch modes
+        if (currentView === "graph") {
+          document.getElementById("graphTitle").value = displayTitle;
+        }
+
+        
+
+        const traces = [];
+        const regions = ["North America", "Europe", "Other"];
+        const symbolMap = {
+          "North America": "star",
+          Europe: "circle",
+          Other: "square",
+        };
+
+        traces.push({
+          x: [null],
+          y: [null],
+          mode: "markers",
+          showlegend: false,
+          marker: {
+            colorscale: activeFocusScale,
+            cmin: -0.2,
+            cmax: 0.2,
+            showscale: true,
+            colorbar: {
+              title: "",
+              len: 0.5,
+              y: 0.25,
+              yanchor: "bottom",
+              tickmode: "array",
+              tickvals: [-0.2, 0.2],
+              ticktext: [
+                "Better for<br>Destinations",
+                "Better for<br>Infrastructure",
+              ],
+            },
+          },
+        });
+
+        regions.forEach((region) => {
+          const regionData = allData.filter((d) => d.region === region);
+          if (regionData.length === 0) return;
+          const symbol = forceCircle ? "circle" : symbolMap[region] || "circle";
+
+          traces.push({
+            name: region,
+            x: [null],
+            y: [null],
+            mode: "markers",
+            legendgroup: region,
+            showlegend: true,
+            marker: { symbol: symbol, color: "gray", size: 10 },
+          });
+
+          traces.push({
+            name: region,
+            x: regionData.map((d) => d.avgScore),
+            y: regionData.map((d) => d.bestAreaScore),
+            mode: "markers",
+            type: "scatter",
+            legendgroup: region,
+            showlegend: false,
+            marker: {
+              symbol: symbol,
+              sizemode: "diameter",
+              size: regionData.map((d) => d.sizeScaled),
+              color: regionData.map((d) => d.focusBalance),
+              colorscale: activeFocusScale,
+              cmin: -0.2,
+              cmax: 0.2,
+              showscale: false,
+              opacity: 0.85,
+              line: { width: 1.5, color: "white" },
+            },
+            customdata: regionData.map((d) => [
+              getFullLocationDisplay(d.state),
+              formatPop(d.pop),
+            ]),
+            hovertemplate:
+              "<b>%{hovertext}</b><br>Loc: %{customdata[0]}<br>Pop: %{customdata[1]}<br>Avg Score: %{x:.1f}<br>Best Area: %{y:.1f}<extra></extra>",
+            hovertext: regionData.map((d) => d.city),
+          });
+        });
+        
+		const visibleRange = getCurrentGraphVisibleRange();
+		const annotations = buildGraphLabelAnnotations(allData, visibleRange);
+		annotations.push(getGraphWatermarkAnnotation());
+
+
+        Plotly.react(
+          "chart-container",
+          traces,
+          {
+            title: { text: `<b>${displayTitle}</b>` },
+            xaxis: { title: { text: "City Wide Score" }, range: [24, 105] },
+            yaxis: { title: { text: "Best Area Score" }, range: [24, 105] },
+            template: "plotly_white",
+            margin: { l: 60, r: 120, t: 80, b: 60 },
+            uirevision: "true",
+            paper_bgcolor: "rgba(0,0,0,0)",
+            plot_bgcolor: "#f8f9fc",
+            hovermode: "closest",
+            hoverdistance: 50,
+            dragmode: "pan",
+            legend: {
+              title: { text: forceCircle ? "" : "Region" },
+              orientation: "h",
+              y: -0.15,
+              x: 0.5,
+              xanchor: "center",
+            },
+			updatemenus: getColorblindUpdatemenu("graph"),
+            annotations: annotations,
+          },
+          {
+            responsive: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: [
+              "lasso2d",
+              "select2d",
+              "autoScale2d",
+              "toggleSpikelines",
+              "pan2d",
+              "toImage",
+            ],
+          },
+        ).then(() => {
+		  attachColorblindPlotlyButton("chart-container");
+          attachGraphRelayoutLabelUpdater(allData);
+        });
+      }
+
+      function updateList() {
+        const container = document.getElementById("listGrid");
+        container.innerHTML = "";
+        const aggMode = document.getElementById("aggFilter").value;
+        const baseData = processDataForList("City Wide");
+        const targetData =
+          aggMode === "City Wide" ? baseData : processDataForList("Best Area");
+
+        document.getElementById("cityCountDisplay").textContent =
+          `${targetData.length} Cities`;
+
+        const createCard = (config) => {
+          let displayData = [...config.data];
+          displayData = displayData.filter((d) => {
+            let val =
+              config.key === "bestAreaScore"
+                ? d.bestAreaScore
+                : config.key === "avgScore"
+                  ? d.avgScore
+                  : config.key === "focusDisparity"
+                    ? d.focusDisparity
+                    : d.raw[config.key] !== undefined
+                      ? d.raw[config.key]
+                      : d[config.key];
+            return (
+              val !== null &&
+              val !== undefined &&
+              val !== "" &&
+              !(typeof val === "number" && isNaN(val))
+            );
+          });
+
+          displayData.sort((a, b) => {
+            let valA =
+              parseFloat(a.raw[config.key]) ||
+              (config.key === "bestAreaScore"
+                ? a.bestAreaScore
+                : config.key === "focusDisparity"
+                  ? a.focusDisparity
+                  : parseFloat(a[config.key])) ||
+              0;
+            let valB =
+              parseFloat(b.raw[config.key]) ||
+              (config.key === "bestAreaScore"
+                ? b.bestAreaScore
+                : config.key === "focusDisparity"
+                  ? b.focusDisparity
+                  : parseFloat(b[config.key])) ||
+              0;
+            return config.reverse ? valA - valB : valB - valA;
+          });
+          displayData = displayData.slice(0, 25);
+
+          const card = document.createElement("div");
+          card.className = "list-card";
+
+          let headerContent = config.title;
+          if (config.type === "stat") {
+            const options = [
+              "Safe Area (sq mi)",
+              "Bike Network (mi)",
+              "Bike Network %",
+              "Bike Paths (mi)",
+              "Bike Paths %",
+              "Bike Lanes (mi)",
+              "Bike Lanes %",
+              "Friendly (mi)",
+              "Friendly %",
+              "Shared Road (miles)",
+              "Shared Road %",
+              "Other (miles)",
+              "Other %",
+              "Total Network",
+              "Destinations",
+              "Bike Parking",
+              "Destination Score",
+              "Bad Ints  / mi",
+              "Furthest Reach #1 (mi)",
+              "Furthest Reach #2 (mi)",
+              "Furthest Reach #3 (mi)",
+            ];
+            let selectHtml =
+              `<select onchange="updateStat(this.value)">` +
+              options
+                .map(
+                  (o) =>
+                    `<option value="${o}" ${o === currentIndivStat ? "selected" : ""}>${o}</option>`,
+                )
+                .join("") +
+              `</select>`;
+            headerContent = `Stat: <div style="display:flex; align-items:center;">${selectHtml}<button class="sort-btn" onclick="toggleStatSort()">${statReverse ? "▲ Btm 25" : "▼ Top 25"}</button></div>`;
+          } else if (config.type === "neighborDisp") {
+            headerContent = `${config.title} <div style="display:flex;"><button class="sort-btn ${!neighborDispReverse ? "active-sort" : ""}" onclick="toggleNeighborDisp('largest')">Largest</button><button class="sort-btn ${neighborDispReverse ? "active-sort" : ""}" onclick="toggleNeighborDisp('smallest')">Smallest</button></div>`;
+          } else if (config.type === "focusDisp") {
+            headerContent = `${config.title} <div style="display:flex;"><button class="sort-btn ${!focusDispReverse ? "active-sort" : ""}" onclick="toggleFocusDisp('infra')">Infra Heavy</button><button class="sort-btn ${focusDispReverse ? "active-sort" : ""}" onclick="toggleFocusDisp('dest')">Dest Heavy</button></div>`;
+          } else if (config.type === "pfb") {
+            headerContent = `${config.title} <div style="display:flex;"><button class="sort-btn ${pfbReverse ? "active-sort" : ""}" onclick="togglePFB('overrated')">Overrated</button><button class="sort-btn ${!pfbReverse ? "active-sort" : ""}" onclick="togglePFB('underrated')">Underrated</button></div>`;
+          } else if (config.type === "copenhagen") {
+            headerContent = `${config.title} <div style="display:flex;"><button class="sort-btn ${copenhagenReverse ? "active-sort" : ""}" onclick="toggleCopenhagen('overrated')">Overrated</button><button class="sort-btn ${!copenhagenReverse ? "active-sort" : ""}" onclick="toggleCopenhagen('underrated')">Underrated</button></div>`;
+          }
+
+          let html = `<h3>${headerContent}</h3><table class="ranking-table">`;
+          displayData.forEach((d, i) => {
+            let val =
+              config.key === "bestAreaScore"
+                ? d.bestAreaScore
+                : config.key === "avgScore"
+                  ? d.avgScore
+                  : config.key === "focusDisparity"
+                    ? d.focusDisparity
+                    : d.raw[config.key] !== undefined
+                      ? d.raw[config.key]
+                      : d[config.key];
+            if (val === undefined || val === null) val = "-";
+            else {
+              if (config.type === "stat")
+                val =
+                  typeof val === "number"
+                    ? (Math.round(val * 10) / 10).toFixed(1)
+                    : val;
+              else if (config.type === "focusDisp")
+                val = Math.abs(Math.round(val));
+              else val = Math.round(val);
+            }
+            html += `<tr><td class="rank-col">${i + 1}</td><td><div>${d.city}</div><div class="city-sub">${getFullLocationDisplay(d.state)}</div></td><td class="val-col"><span class="score-badge">${val}</span></td></tr>`;
+          });
+          html += `</table>`;
+          card.innerHTML = html;
+          container.appendChild(card);
+        };
+
+        createCard({
+          title: "Citywide Scores",
+          data: baseData,
+          key: "Average Score",
+          reverse: false,
+        });
+        createCard({
+          title: "Best Area Scores",
+          data: baseData,
+          key: "bestAreaScore",
+          reverse: false,
+        });
+        createCard({
+          title: "Highest Points",
+          data: targetData,
+          key: "Highest Point",
+          reverse: false,
+        });
+        createCard({
+          title: "Stat",
+          data: targetData,
+          key: currentIndivStat,
+          reverse: statReverse,
+          type: "stat",
+        });
+        createCard({
+          title: "Neighborhood Disparities",
+          data: targetData,
+          key: "Disparity",
+          reverse: neighborDispReverse,
+          type: "neighborDisp",
+        });
+        createCard({
+          title: "Focus Disparities",
+          data: targetData,
+          key: "focusDisparity",
+          reverse: focusDispReverse,
+          type: "focusDisp",
+        });
+        createCard({
+          title: "PFB Rankings",
+          data: targetData,
+          key: "PFB rank dif",
+          reverse: pfbReverse,
+          type: "pfb",
+        });
+        createCard({
+          title: "Copenhagen Rankings",
+          data: targetData,
+          key: "Copenhagen rank dif",
+          reverse: copenhagenReverse,
+          type: "copenhagen",
+        });
+      }
+    </script>
+
+    <div
+	  class="bottom-info-section"
+      style="
+        padding: 25px;
+        background-color: #cce0ff;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        text-align: center;
+        max-width: 2300px;
+        margin: 40px auto 20px auto;
+      "
+    >
+      <div
+        class="overview-text"
+		style="
+          max-width: 1500px;
+          margin: 0 auto 20px auto;
+          text-align: left;
+          color: #444;
+          line-height: 1.6;
+          font-size: 1rem;
+        "
+      >
+        <h2
+          style="
+            color: #333;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            margin-top: 0;
+          "
+        >
+          Overview: The Bike Friendliness Index
+        </h2>
+        <p style="margin-bottom: 10px">
+          The Bike Friendliness Index estimates how easy it is to get around by bike in hundreds of communities around the world. It uses OpenStreetMap data on roads, bike infrastructure, and destinations cyclists may want to reach to estimate how well each community’s bike network allows cyclists to comfortably go where they want to go.
+		  </p>
+        <p style="margin-bottom: 10px">
+		Other bikeability ratings tend to focus on cities famous for biking, or only compare cities within a specific country. Most also treat city limits like hard walls and don't measure how well infrastructure connects to destinations and the rest of the bike network. That can miss what riding in a smaller or slightly less biking friendly city actually feels like. 
+		  This index is built to work across many communities using publicly available data, while estimating how far someone can realistically bike without relying too much on stressful or risky riding.
+        </p>
+        <p style="margin-bottom: 15px">
+          Because bikeability depends on why you ride and what you are comparing, each location gets several types of scores. Infrastructure Focus emphasizes recreational biking, Destination Focus emphasizes transportation and errands, and Balanced Focus weighs both equally.
+		  Scores are also shown as “City Wide” and “Best Area.” City Wide averages the quality of the cycling network at many points across the city. Looking at the whole city is the traditional way to score cities, but City Wide 
+		  differs because it includes easy to access infrastructure and destinations outside of city limits as well. "Best Area" takes things one step further and only averages the higher scoring areas, which helps to avoid penalizing 
+		  cities just because their official borders include large car dependent suburban/rural areas that most people would not choose when looking for a bike friendly neighborhood. Best Area also is a more useful metric when deciding where to live.
+        </p>
+
+        <p
+          style="
+            margin-bottom: 0;
+            padding: 15px;
+            background-color: #e6f0ff;
+            border-radius: 8px;
+            border-left: 4px solid #0d6efd;
+          "
+        >
+          This was a lot of work, so I hope you enjoy! This site is still a work in progress as I tweak things and add new locations. If you have any suggestions or questions, feel free to contact me at
+          <a
+            href="mailto:comments@bikefriendlinessindex.org"
+            style="color: #0d6efd; text-decoration: none; font-weight: 600"
+            >comments@bikefriendlinessindex.org</a
+          >.
+        </p>
+      </div>
+
+      <div
+	    class="methodology-box"
+        style="
+          text-align: left;
+          max-width: 1500px;
+          margin: 0 auto 24px auto;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 15px 20px;
+        "
+      >
+        <details style="cursor: pointer">
+          <summary
+            style="
+              font-weight: 700;
+              color: #444;
+              font-size: 1.15rem;
+              outline: none;
+              list-style-position: inside;
+            "
+          >
+            📊 Methodology (Click to expand)
+          </summary>
+
+          <div
+		    class="methodology-text"
+            style="
+              margin-top: 15px;
+              font-size: 1rem;
+              color: #555;
+              line-height: 1.6;
+              padding-left: 25px;
+            "
+          >
+            <h3 style="margin-top: 0; color: #333; font-size: 1.25rem">
+              How the Index Works
+            </h3>
+
+            <p style="margin-top: 10px">
+              <strong style="color: #333">The Inspiration</strong><br />
+              This project started with a simple problem: I wanted to find a genuinely bikeable place to live.
+			  I was disappointed with existing bikeability ratings because they typically focus on a select few very bike friendly
+              cities, or focus on a single country. Additionally, if they evaluate infrastructure at all,
+			  they tend to look strictly within municipal borders. That can miss what biking somewhere is actually like. For example, a quiet neighborhood with
+              minimal internal infrastructure might sit directly adjacent to a world-class, multi-city trail system. To address these blind
+              spots, this tool tries to measure what it is actually like to get around a community you live in by bike.
+            </p>
+
+            <p>
+              <strong style="color: #333">Data Sourcing</strong><br />
+              The index is built from crowdsourced OpenStreetMap (OSM) data collected through the Overpass API. Beyond just roads and paths, all relevant data is collected,
+			  from speed limits to intersection signage to path surface materials. By compiling this raw data, the tool
+              builds a complete graph of the local cycling network.
+            </p>
+
+            <p>
+              <strong style="color: #333">Stress Scoring</strong><br />
+              With the network graph, the algorithm assigns a stressfulness penalty to every segment, with over a dozen possible
+              penalties factored in. High-speed arterials receive severe penalties, while painted lanes reduce stress, and protected
+              cycleways are considered extremely low stress. It also estimates the danger of an intersection based on speed limits and how it is controlled,
+              factoring that into the cumulative stress.
+            </p>
+
+            <p>
+              <strong style="color: #333">Pathfinding</strong><br />
+              The core simulation uses Dijkstra's algorithm to model a cyclist's journey outward from a starting node. The tool attempts
+              to simulate riding in all possible directions, measuring the stress along the way. If the cumulative stress of navigating fast
+              traffic, dangerous intersections, or poor surfaces exceeds this limit, the path is cut off. This is used to calculate several
+              metrics, such as how far a cyclist can travel in a single direction and what percent of their route is bike infrastructure.
+              While all paths start inside the city, they may leave the city while simulating the cycling, incorporating data that alternatives
+              do not.
+            </p>
+
+            <p>
+              <strong style="color: #333"
+                >Destination Value and Amenity Scoring</strong
+              ><br />
+              A safe bike network is only as good as the places it connects. The tool cross-references the safely reachable network with a database
+              of local Points of Interest (POIs). Amenities are weighted by how important they are likely to be to the average cyclist: grocery stores, schools, transit hubs,
+              and bike shops carry heavy weight, while restaurants and parks offer moderate value, and a car mechanic is completely excluded. By prioritizing locations that serve daily
+              livability over tourist destinations, the tool outputs a "Destination Score" that quantifies the practical utility of the local network.
+            </p>
+
+            <p>
+              <strong style="color: #333">Scoring</strong><br />
+              Because bikeability means different things to different people, the program generates nine distinct scores for every city. It uses
+              three weightings: Infrastructure prioritized (for recreational riding), Destination prioritized (for commuting and errands), and
+              a Balanced approach. It applies these across three scopes: a traditional City Wide average, a Best Area score (highlighting the
+              top 20% most bikeable neighborhoods), and a High Point score (the 95th percentile, as the highest point or two can sometimes be an
+              unrealistic living location). There is an “Address Mode” where you can score any single address, and the main "City Mode," that runs
+              dozens to hundreds of Address Mode calculations spread out across the city and averages the scores together.
+            </p>
+
+            <p>
+              <strong style="color: #333"
+                >Contextual Accuracy in Practice</strong
+              ><br />
+              The strengths of the methodology are visible when comparing locations on alternative indexes. For instance, Mackinac Island (a small tourist
+              town that bans cars) scores a perfect 100 on other indexes, while a small inner suburb like Grandview Heights, Ohio scores poorly due to minimal bike specific infrastructure within the suburb. 
+			  However, Mackinac Island has very few amenities, limiting practical daily living. On the other hand, Grandview Heights borders a world-class, grade-separated path offering stress-free cycling to a major downtown, university, and
+              surrounding suburbs, making the suburb more practical for the typical cyclist.
+            </p>
+
+            <h3 style="margin-top: 25px; color: #333; font-size: 1.25rem">
+              Map, Graph, and List Modes
+            </h3>
+            <p>
+              To make this massive dataset accessible, this site currently visualizes data for many of the analyzed communities, 
+			  with a focus on cities with at least 200,000 people. You can explore the findings using three distinct viewing modes:
+            </p>
+            <ul style="margin-top: 5px">
+              <li>
+                <strong style="color: #333">Map Mode:</strong> View cities geographically. You can toggle this to show only the
+                highest-scoring city in each country for a global overview, include regions for supported countries, or display every
+                tracked city. Hover over cities/countries for more information.
+              </li>
+              <li>
+                <strong style="color: #333">Graph Mode:</strong> This plots the cities on a scatter plot, comparing their City Wide score
+                against their Best Area score. This visually highlights which cities are consistently bikeable throughout, and which suffer
+                from massive disparities between their best neighborhoods and their worst. Hover over points for more information. There
+                are tools on the top right to adjust the panning and zooming.
+              </li>
+              <li>
+                <strong style="color: #333">List Mode:</strong> A straightforward, sortable breakdown of the raw stats and metrics
+                for many cities in the database.
+              </li>
+            </ul>
+
+            <h3 style="margin-top: 25px; color: #333; font-size: 1.25rem">
+              Limitations
+            </h3>
+            <p>
+              The program does have some inherent limitations. Its accuracy relies heavily on the completeness of OSM data. When
+              metadata like speed limits or surface types are missing, the algorithm must use estimates. Some cities are currently
+              lacking full compatibility for analysis, as they do not have a boundary on OSM (such as Albuquerque and quite a few cities 
+			  in developing countries) or because their boundaries are very large (a common issue particularly with Chinese cities). 
+			  Additionally, because the tool just measures physical infrastructure and destinations, it cannot include cultural
+              factors such as driver awareness, local cycling volume, or municipal policy. Variables like weather and elevation are
+              currently excluded, although they may be possible to eventually integrate.
+            </p>
+            <p>
+              Despite these limitations, the index is one of the best ways to compare bikeability across many places around the globe.
+            </p>
+          </div>
+        </details>
+      </div>
+
+            <div
+        id="more-info-box"
+        style="
+          text-align: left;
+          max-width: 1500px;
+          margin: 0 auto 24px auto;
+          background: #f8f9fa;
+          border: 1px solid #dee2e6;
+          border-radius: 8px;
+          padding: 15px 20px;
+          font-size: 1rem;
+          color: #555;
+          line-height: 1.6;
+        "
+      >
+        <h3 style="margin: 0 0 12px 0; color: #333; font-size: 1.25rem">
+          Want To See More?
+        </h3>
+        <p style="margin-top: 0; margin-bottom: 12px">
+          While the public database provides an overview of the data with a focus on cities over 200,000 in population, the Bike Friendliness Index can also process other areas or provide additional data for a location upon request. 
+		  You can request the addation any compatible city, suburb, town, neighborhood, county, or other small political region to the database. To verify compatibility, simply search your desired
+          location using
+          <a
+            href="https://nominatim.openstreetmap.org/ui/search.html"
+            target="_blank"
+            style="color: #0066cc; text-decoration: none"
+            >Nominatim</a
+          >. If the search returns a polygon boundary roughly the size of a town or city, the area can be processed. If it just returns a point, 
+          a very small boundary (like the size of a house) or a very large boundary (like the size of a state), it is not currently supported. I'm currently accepting one free request per person. If you are requesting multiple locations, I ask for a donation of $5 per additional location.
+		  Email comments@bikefriendlinessindex.org with the Nominatim link(s) for the boundary/boundaries you want added, or for questions/help with this process.
+        </p>
+        <p style="margin-top: 0; margin-bottom: 8px">
+          <strong style="color: #333">Requesting a Custom Analysis:</strong>
+		  You can request a Full City Analysis for any city currently on the map or a newly requested area. This deep dive
+          provides all the data for the location. This includes the value for the ~2 dozen stats, both overall and for every individual calculated 
+          point (typically at least 1 point per square mile). These points can be viewed on a map to get an idea of which neighborhoods are best to live in. 
+          It also includes the comprehensive data overlays. These overlays display:
+        </p>
+        <ul
+          style="
+            margin: 0 0 12px 0;
+            padding-left: 22px;
+            line-height: 1.35;
+          "
+        >
+          <li style="margin-bottom: 4px">The stress designation of every street and path</li>
+          <li style="margin-bottom: 4px">The network type of every street and path</li>
+          <li style="margin-bottom: 4px">Points with the location for useful reachable destinations</li>
+          <li style="margin-bottom: 0">The location of potentially dangerous intersections</li>
+        </ul>
+        <p style="margin-top: 0; margin-bottom: 12px">
+          You can also request an Address Analysis for any specific address or set of coordinates worldwide, regardless of boundary compatibility (provided it is adjacent to a
+          bike-permissive road or path). Address Mode includes the four main data overlays from City Mode, plus three specialized
+          visualizations unique to Address Analysis: a cumulative stress map detailing how difficult it is to reach surrounding
+          areas, a tree visualization highlighting ideal corridors to take, and a boundary visualization of the total safe area within your reach.
+        </p>
+		<p style="margin-top: 0; margin-bottom: 12px">
+		Custom analyses require a moderate amount of work for me to prepare, so I ask for a donation for a Full City Analysis or Address Analysis (minimum $10 per Full City/Address analysis) 
+		  to help cover the time needed to process areas, prepare custom results, and keep the project running. Email comments@bikefriendlinessindex.org with questions/requests.
+		</p>
+        <p style="margin-top: 15px; margin-bottom: 0">
+          I also greatly appreciate donations from anyone who just wants to support the project!
+          
+        </p>
+      </div>
+      
+      <div
+        style="
+          display: flex;
+          justify-content: center;
+          gap: 15px;
+          flex-wrap: wrap;
+        "
+      >
+        <a
+          href="https://www.paypal.com/donate/?business=JSMHLH5VXWH8G&no_recurring=0&item_name=Creator+of+the+Bike+Friendliness+Index&currency_code=USD"
+          target="_blank"
+          style="
+            display: inline-block;
+            background-color: #003087;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: background-color 0.2s;
+          "
+        >
+          Support the Bike Friendliness Index
+        </a>
+      </div>
+    </div>
+    <script
+      defer
+      src="https://static.cloudflareinsights.com/beacon.min.js"
+      data-cf-beacon='{"token": "a15ab1a14ea240a6bab01bde134c2250"}'
+    ></script>
+  </body>
+</html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>The Bike Friendliness Index</title>  <!-- mobile optimizations-->
+    <script src="https://cdn.plot.ly/plotly-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      body {
+        font-family: "Inter", "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        padding: 20px;
+        background-color: #e0f0ff;
+        color: #1e293b;
+      }
+
+      .controls {
+        background: #cce0ff;
+        padding: 15px 20px;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        margin-bottom: 15px;
+        width: 100%;
+        max-width: 2300px;
+        margin-left: auto;
+        margin-right: auto;
+        box-sizing: border-box;
+      }
+
+      .section-group {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 5px 0; /* Removed wasted right padding to give filters more room */
+      }
+
+	/* Mobile Layout: under 840px */
+	@media (max-width: 839px) {
+	  body {
+		padding: 6px;
+	  }
+
+	  .site-header {
+		padding: 9px 12px;
+		margin-bottom: 7px;
+		border-radius: 12px;
+	  }
+
+	  .site-header h1 {
+		font-size: 14px;
+	  }
+
+	  .controls {
+		padding: 7px;
+		margin-bottom: 7px;
+		border-radius: 12px;
+		font-size: 10px;
+	  }
+
+	  .controls-grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+		grid-template-areas:
+		  "mode view export"
+		  "filters filters filters";
+		gap: 8px;
+		align-items: start;
+	  }
+
+	  .sec-mode,
+	  .sec-filters,
+	  .sec-view,
+	  .sec-export {
+		min-width: 0;
+		box-sizing: border-box;
+	  }
+
+	  .sec-mode {
+		grid-area: mode;
+		border-left: none;
+		padding-left: 0;
+	  }
+
+	  .sec-view {
+		grid-area: view;
+		border-left: 3px solid #e0e0e0;
+		padding-left: 7px !important;
+	  }
+
+	  .sec-export {
+		grid-area: export;
+		border-left: 3px solid #e0e0e0;
+		border-top: none;
+		padding-left: 7px !important;
+		padding-top: 0;
+	  }
+
+	  .sec-filters {
+		grid-area: filters;
+		border-left: none;
+		border-top: 3px solid #e0e0e0;
+		padding-left: 0;
+		padding-top: 8px;
+	  }
+
+	  .section-group {
+		gap: 3px;
+		padding: 2px 0;
+	  }
+
+	  .sec-filters .section-group > div:first-child,
+	  .sec-view .section-group > div:first-child {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px 10px;
+		min-width: 0;
+	  }
+
+	  .control-item,
+	  .btn-group,
+	  .action-btn,
+	  .sec-export input[type="text"] {
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+	  }
+
+	  .control-item {
+		gap: 3px;
+	  }
+
+	  /* Section headers: Choose Mode, Global Filters, View Settings, etc. */
+	  .controls-grid summary label,
+	  .controls-grid > .section-group > .control-item > label {
+		font-size: 11px !important;
+		line-height: 1.15;
+		margin-bottom: 2px;
+	  }
+
+	  /* Small labels: Focus, Minimum Population, Map Level, etc. */
+	  .controls-grid .sub-label {
+		font-size: 10px !important;
+		line-height: 1.1;
+		height: auto;
+	  }
+
+	  #cityCountDisplay {
+		font-size: 9px !important;
+		line-height: 1.1;
+		padding: 0 4px !important;
+		margin-left: 4px !important;
+		border-radius: 20px;
+	  }
+
+	  #tryTheseText {
+		font-size: 9px !important;
+		line-height: 1.1;
+		margin-left: 3px !important;
+	  }
+
+	  input[type="text"],
+	  input[type="number"],
+	  select {
+		font-size: 10px !important;
+		line-height: 1.1;
+		padding: 2px 4px;
+		height: 21px;
+	  }
+
+	  input[type="number"] {
+		width: 48px;
+	  }
+
+	  /* Fix the weird tall Minimum Population / Minimum Score boxes */
+	  #minPop,
+	  #minScore {
+		height: 22px !important;
+		min-height: 22px !important;
+		max-height: 22px !important;
+		line-height: 1 !important;
+		padding: 1px 4px !important;
+		box-sizing: border-box;
+		align-self: flex-start;
+	  }
+
+	  /* Add room for one more digit */
+	  #minPop {
+		width: 70px !important;
+	  }
+
+	  /* Keep Minimum Score narrower */
+	  #minScore {
+		width: 42px !important;
+	  }
+
+	  /* Make placeholder/example text fit on small screens */
+	  #minPop::placeholder,
+	  #minScore::placeholder {
+		font-size: 7px;
+		opacity: 0.75;
+	  }
+
+	  select {
+		width: 64px;
+	  }
+
+	  input[type="range"] {
+		width: 95px;
+	  }
+
+	  button,
+	  .btn-group button {
+		font-size: 10px !important;
+		line-height: 1.1;
+		min-height: 21px;
+		padding: 3px 5px;
+	  }
+
+	  .btn-group {
+		flex-wrap: wrap;
+		gap: 1px;
+	  }
+
+	  .btn-group button,
+	  .btn-group button:first-child,
+	  .btn-group button:last-child,
+	  .btn-group button:not(:first-child):not(:last-child) {
+		border-radius: 6px;
+		border-left: 1px solid #ced4da;
+	  }
+
+	  .action-btn {
+		font-size: 10px !important;
+		line-height: 1.1;
+		min-height: 22px;
+		padding: 4px 6px;
+		margin-top: 2px;
+	  }
+
+	  .mode-toggle-btn,
+	  #settingsToggleBtn {
+		width: 100%;
+	  }
+
+	  .checkbox-wrapper {
+		height: 21px;
+		gap: 4px;
+	  }
+
+	  .checkbox-wrapper input {
+		width: 13px;
+		height: 13px;
+	  }
+
+	  #graphTitle,
+	  .sec-export input[type="text"] {
+		font-size: 10px !important;
+		line-height: 1.1;
+		height: 21px;
+		width: 100%;
+		max-width: 100%;
+		box-sizing: border-box;
+	  }
+
+	  .sec-export .action-btn {
+		width: 100%;
+		white-space: normal;
+		line-height: 1.15;
+	  }
+
+	  #chart-container,
+	  #map-container {
+		aspect-ratio: 1.2 / 1;
+		max-height: none;
+		min-height: 390px;
+		height: auto;
+		padding: 6px;
+		border-radius: 12px;
+	  }
+
+	  #map-container .gtitle,
+	  #chart-container .gtitle {
+		font-size: 10px !important;
+	  }
+
+	  #map-container .cbtitle,
+	  #chart-container .cbtitle {
+		font-size: 8px !important;
+	  }
+
+	  .list-grid {
+		grid-template-columns: 1fr;
+		gap: 10px;
+	  }
+
+	  .list-card {
+		max-height: none;
+	  }
+
+	  .list-card h3 {
+		padding: 10px 10px 8px 10px;
+		font-size: 0.9rem;
+	  }
+
+	  table.ranking-table {
+		font-size: 0.78rem;
+		padding: 0 5px 5px 5px;
+	  }
+
+	  table.ranking-table th,
+	  table.ranking-table td {
+		padding: 5px 6px;
+	  }
+
+	}
+	
+	@media (max-width: 839px) {
+	  .bottom-info-section {
+		padding: 14px !important;
+		margin: 24px auto 14px auto !important;
+	  }
+
+	  .overview-text,
+	  .methodology-text {
+		font-size: 0.82rem !important;
+		line-height: 1.35 !important;
+	  }
+
+	  .overview-text h2 {
+		font-size: 1.05rem !important;
+		line-height: 1.2 !important;
+	  }
+
+	  .methodology-box {
+		padding: 12px 14px !important;
+	  }
+
+	  .methodology-box summary {
+		font-size: 0.95rem !important;
+		line-height: 1.25 !important;
+	  }
+
+	  .methodology-text {
+		padding-left: 10px !important;
+	  }
+
+	  .methodology-text h3 {
+		font-size: 0.98rem !important;
+		line-height: 1.25 !important;
+	  }
+
+	  .overview-text p,
+	  .methodology-text p,
+	  .methodology-text li {
+		font-size: 0.82rem !important;
+		line-height: 1.35 !important;
+	  }
+
+	  .overview-text p[style*="padding"] {
+		padding: 10px !important;
+	  }
+
+	  .methodology-text ul {
+		padding-left: 18px !important;
+	  }
+	}
+
+     @media (min-width: 840px) and (max-width: 964px) {
+		  body {
+			padding: 10px;
+		  }
+
+		  .controls {
+			padding: 10px 12px;
+		  }
+
+		  .controls-grid {
+			display: grid;
+			grid-template-columns: 125px minmax(280px, 1fr) minmax(160px, 0.65fr) minmax(125px, 0.5fr);
+			gap: 8px;
+			justify-content: center;
+			align-items: start;
+		  }
+
+		  .sec-mode,
+		  .sec-filters,
+		  .sec-view,
+		  .sec-export {
+			min-width: 0;
+			box-sizing: border-box;
+		  }
+
+		  .sec-mode {
+			grid-column: 1 / 2;
+			grid-row: 1;
+			border-left: none;
+			padding-left: 0;
+		  }
+
+
+		  .sec-filters {
+			grid-column: 2 / 3;
+			grid-row: 1 / 3;
+			border-left: 3px solid #e0e0e0;
+			padding-left: 8px;
+		  }
+
+		  .sec-view {
+			grid-column: 3 / 4;
+			grid-row: 1 / 3;
+			border-left: 3px solid #e0e0e0;
+			padding-left: 8px;
+		  }
+
+		  .sec-export {
+			grid-column: 4 / 5;
+			grid-row: 1 / 3;
+			border-left: 3px solid #e0e0e0;
+			padding-left: 8px;
+		  }
+
+		  .section-group {
+			gap: 6px;
+			padding: 3px 0;
+		  }
+
+		  .sec-filters .section-group > div:first-child,
+		  .sec-view .section-group > div:first-child {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px 10px !important;
+			min-width: 0;
+		  }
+
+		  .controls-grid summary label,
+		  .controls-grid > .section-group > .control-item > label {
+			font-size: 0.82rem;
+			line-height: 1.1;
+			margin-bottom: 1px;
+		  }
+
+		  .controls-grid .sub-label {
+			font-size: 0.72rem;
+			line-height: 1.05;
+		  }
+
+		  #cityCountDisplay {
+			font-size: 0.65rem !important;
+			padding: 1px 6px !important;
+			margin-left: 6px !important;
+		  }
+
+		  #tryTheseText {
+			display: none;
+		  }
+
+		  .control-item {
+			gap: 3px;
+			min-width: 0;
+		  }
+
+		  .btn-group {
+			flex-wrap: wrap;
+			gap: 0;
+			min-width: 0;
+		  }
+
+		  .btn-group button {
+			font-size: 10.5px !important;
+			padding: 5px 6px !important;
+			white-space: nowrap;
+		  }
+
+		  .action-btn {
+			font-size: 10.5px !important;
+			padding: 6px 7px !important;
+		  }
+
+		  .mode-toggle-btn,
+		  #settingsToggleBtn {
+			width: 100%;
+		  }
+
+		  input[type="text"],
+		  input[type="number"],
+		  select {
+			font-size: 10.5px !important;
+			padding: 4px 5px !important;
+		  }
+
+		  input[type="number"] {
+			width: 52px;
+		  }
+
+		  select {
+			width: 72px;
+		  }
+
+		  input[type="range"] {
+			width: 110px;
+		  }
+
+		  .checkbox-wrapper {
+			height: 28px;
+			gap: 5px;
+		  }
+
+		  .checkbox-wrapper input {
+			width: 15px;
+			height: 15px;
+		  }
+
+		  .sec-export .control-item {
+			align-items: flex-start;
+		  }
+
+		  .sec-export input[type="text"] {
+			width: 100%;
+			max-width: 125px;
+			font-size: 10.5px !important;
+			box-sizing: border-box;
+		  }
+
+		  .sec-export .action-btn {
+			width: 100%;
+			white-space: normal;
+			line-height: 1.15;
+		  }
+
+		  #graph-options {
+			gap: 8px 10px !important;
+			margin-top: 6px !important;
+		  }
+		}
+
+      /* Compact Desktop Layout: 1000px through 1384px */
+		@media (min-width: 965px) and (max-width: 1409px) {
+		  body {
+			padding: 12px;
+		  }
+
+		  .controls {
+			padding: 12px 14px;
+		  }
+
+		  .controls-grid {
+			display: flex;
+			flex-wrap: nowrap;
+			gap: 10px;
+			justify-content: center;
+			align-items: flex-start;
+		  }
+
+		  .sec-mode {
+			  flex: 0 0 125px;
+			  border-left: none;
+			  padding-left: 0;
+			}
+
+			.sec-filters {
+			  flex: 1 1 320px;
+			  min-width: 300px;
+			  border-left: 3px solid #e0e0e0;
+			  padding-left: 8px;
+			}
+
+			.sec-view {
+			  flex: 0 1 185px;
+			  min-width: 165px;
+			  border-left: 3px solid #e0e0e0;
+			  padding-left: 8px;
+			}
+
+			.sec-export {
+			  flex: 0 1 135px;
+			  min-width: 125px;
+			  border-left: 3px solid #e0e0e0;
+			  padding-left: 8px;
+			}
+
+		  .section-group {
+			gap: 6px;
+			padding: 3px 0;
+		  }
+
+		  .sec-filters .section-group > div:first-child,
+		  .sec-view .section-group > div:first-child {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px 12px !important;
+			min-width: 0;
+		  }
+
+		  /* Section titles: Global Filters, View Settings, Accessibility, Name & Export, Choose Mode */
+		  .controls-grid summary label,
+		  .controls-grid > .section-group > .control-item > label {
+			font-size: 0.82rem;
+			line-height: 1.1;
+			margin-bottom: 1px;
+		  }
+
+		  /* Control labels: Focus, Minimum Population, Minimum Score, Map Level, etc. */
+		  .controls-grid .sub-label {
+			font-size: 0.72rem;
+			line-height: 1.05;
+		  }
+
+		  #cityCountDisplay {
+			font-size: 0.65rem !important;
+			padding: 1px 6px !important;
+			margin-left: 6px !important;
+		  }
+
+		  #tryTheseText {
+			font-size: 0.62rem !important;
+			margin-left: 3px !important;
+		  }
+
+		  .control-item {
+			gap: 3px;
+			min-width: 0;
+		  }
+
+		  .btn-group {
+			flex-wrap: wrap;
+			gap: 0;
+			min-width: 0;
+		  }
+
+		  .btn-group button {
+			font-size: 11px;
+			padding: 5px 7px;
+			white-space: nowrap;
+		  }
+
+		  .action-btn {
+			font-size: 11px;
+			padding: 6px 8px;
+		  }
+
+		  .mode-toggle-btn,
+		  #settingsToggleBtn {
+			width: 100%;
+		  }
+
+		  input[type="text"],
+		  input[type="number"],
+		  select {
+			font-size: 11px;
+			padding: 4px 5px;
+		  }
+
+		  input[type="number"] {
+			width: 56px;
+		  }
+
+		  select {
+			width: 76px;
+		  }
+
+		  input[type="range"] {
+			width: 120px;
+		  }
+
+		  .checkbox-wrapper {
+			height: 28px;
+			gap: 5px;
+		  }
+
+		  .checkbox-wrapper input {
+			width: 15px;
+			height: 15px;
+		  }
+
+		  .sec-export .control-item {
+			align-items: flex-start;
+		  }
+
+		  .sec-export input[type="text"] {
+			width: 100%;
+			max-width: 170px;
+			font-size: 11px;
+			box-sizing: border-box;
+		  }
+
+		  .sec-export .action-btn {
+			width: 100%;
+			white-space: normal;
+			line-height: 1.15;
+		  }
+
+		  #graph-options {
+			gap: 10px 12px !important;
+			margin-top: 6px !important;
+		  }
+		}
+
+      /* Wide Layout: 1385px+ */
+      @media (min-width: 1410px) {
+        .controls-grid {
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 15px;
+          justify-content: center;
+          align-items: flex-start;
+        }
+
+        .sec-mode,
+        .sec-filters,
+        .sec-view,
+        .sec-export {
+          grid-column: auto;
+          grid-row: auto;
+          box-sizing: border-box;
+        }
+
+        .sec-mode {
+          flex: 0 0 auto;
+        }
+
+        .sec-filters {
+          flex: 1 1 500px;
+          min-width: 450px;
+          border-left: 3px solid #e0e0e0;
+          padding-left: 15px;
+        }
+
+        .sec-view {
+          flex: 0 1 400px;
+          min-width: 210px;
+          border-left: 3px solid #e0e0e0;
+          padding-left: 15px;
+        }
+
+   
+        .sec-export {
+          flex: 0 0 auto;
+          border-left: 3px solid #e0e0e0;
+          padding-left: 15px;
+        }
+
+        .sec-view .section-group > div:first-child {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          min-width: 0;
+        }
+      }
+
+      /* Section headers act as labels; the main settings button handles hiding. */
+      summary {
+        list-style: none;
+        outline: none;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      summary label {
+        display: inline-block;
+      }
+
+      /* Hide full settings sections, including headers. */
+      .controls-grid.settings-hidden .sec-filters,
+      .controls-grid.settings-hidden .sec-view,
+      .controls-grid.settings-hidden .sec-export {
+        display: none !important;
+      }
+
+      .control-item {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+
+      /* Keep export controls compact on wide screens. */
+      .sec-export .control-item {
+        align-items: flex-start;
+      }
+
+      label {
+        font-weight: 700;
+        font-size: 0.95rem;
+        color: #0f172a;
+        margin-bottom: 2px;
+      }
+
+      .sub-label {
+        font-size: 0.85rem;
+        color: #475569;
+        font-weight: 600;
+        line-height: 1.2;
+        height: auto;
+        display: block;
+      }
+
+      /* Highlight recommended map options. */
+      @keyframes pulse {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select {
+        padding: 6px;
+        border: 1px solid #80b0ff;
+        border-radius: 6px;
+        background-color: #ffffff;
+      }
+      input[type="text"] {
+        width: 250px;
+      }
+      input[type="number"] {
+        width: 70px;
+      }
+      select {
+        width: 90px;
+        cursor: pointer;
+      }
+      input[type="range"] {
+        width: 150px;
+        cursor: pointer;
+      }
+
+      .checkbox-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 35px;
+      }
+      .checkbox-wrapper input {
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+      }
+
+      .btn-group {
+        display: flex;
+      }
+      .btn-group button {
+        padding: 6px 12px;
+        cursor: pointer;
+        border: 1px solid #ced4da;
+        background-color: #f8f9fa;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.2s;
+      }
+      .btn-group button:first-child {
+        border-radius: 6px 0 0 6px;
+      }
+      .btn-group button:last-child {
+        border-radius: 0 6px 6px 0;
+        border-left: none;
+      }
+      .btn-group button:not(:first-child):not(:last-child) {
+        border-left: none;
+      }
+      .btn-group button:hover {
+        background-color: #e2e6ea;
+      }
+
+      .btn-group button.active-infra {
+        background-color: #198754 !important;
+        border-color: #198754 !important;
+        color: white;
+      }
+      .btn-group button.active-balanced {
+        background-color: #6f42c1 !important;
+        border-color: #6f42c1 !important;
+        color: white;
+      }
+      .btn-group button.active-dest {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+        color: white;
+      }
+      .btn-group button.active {
+        background-color: #6c757d;
+        color: white;
+        border-color: #6c757d;
+      }
+
+      .action-btn {
+        padding: 8px 16px;
+        background-color: #198754;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        margin-top: 5px;
+      }
+      .action-btn:hover {
+        background-color: #157347;
+      }
+
+      .mode-toggle-btn {
+        background-color: #0d6efd;
+        width: 100%;
+      }
+      .mode-toggle-btn:hover {
+        background-color: #0b5ed7;
+      }
+
+      #settingsToggleBtn {
+        width: 100%;
+      }
+
+      /* Mobile-friendly chart/map sizing and scrolling. */
+      #chart-container,
+      #map-container {
+        width: 100%;
+        max-width: 2300px;
+        aspect-ratio: 1.9 / 1;
+        min-height: 500px;
+        background: #cce0ff;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        padding: 10px;
+        box-sizing: border-box;
+        margin: 0 auto;
+        touch-action: pan-y;
+      }
+
+      
+
+      .site-header {
+        background: #cce0ff;
+        padding: 15px 20px;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        max-width: 2300px;
+        margin-left: auto;
+        margin-right: auto;
+        box-sizing: border-box;
+      }
+      .site-header h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        color: #000000;
+        font-weight: 700;
+      }
+
+      #list-view-container {
+        width: 100%;
+        background: #e0f0ff;
+        max-width: 2300px;
+        margin-left: auto;
+        margin-right: auto;
+        box-sizing: border-box;
+      }
+
+      .list-grid {
+		  display: grid;
+		  grid-template-columns: repeat(auto-fill, minmax(min(100%, 350px), 1fr));
+		  gap: 20px;
+		}
+
+      /* ===== LIST CARDS – ENHANCED ===== */
+      .list-card {
+        background: #cce0ff;
+        padding: 0;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        max-height: 500px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+      .list-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+      }
+
+      .list-card h3 {
+        position: sticky;
+        top: 0;
+        background: #cce0ff;
+        z-index: 10;
+        margin: 0;
+        padding: 16px 16px 12px 16px;
+        font-size: 1.1rem;
+        border-bottom: 2px solid #80b0ff;
+        color: #0f172a;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        letter-spacing: 0.3px;
+      }
+
+      .list-card h3 select {
+        font-size: 0.85rem;
+        padding: 4px;
+        width: auto;
+        max-width: 140px;
+        margin-left: 5px;
+        font-weight: normal;
+      }
+
+      .sort-btn {
+        padding: 4px 8px;
+        margin-left: 5px;
+        font-size: 0.75rem;
+        cursor: pointer;
+        background: #e9ecef;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-weight: 600;
+        color: #555;
+        white-space: nowrap;
+      }
+      .sort-btn:hover {
+        background: #dee2e6;
+        color: #333;
+      }
+      .sort-btn.active-sort {
+        background: #0d6efd;
+        color: white;
+        border-color: #0d6efd;
+      }
+
+      table.ranking-table {
+        width: 100%;
+        font-size: 0.95rem;
+        margin-bottom: 15px;
+        border-collapse: separate;
+        border-spacing: 0 4px;
+        padding: 0 8px 8px 8px;
+        flex: 1;
+      }
+
+      table.ranking-table th {
+        text-align: left;
+        color: #475569;
+        font-size: 0.8rem;
+        padding: 8px 16px;
+        border-bottom: none;
+        background: #e6f2ff;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      table.ranking-table td {
+        padding: 8px 16px;
+        border-bottom: none;
+        background: #ffffffc0;
+        backdrop-filter: blur(2px);
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
+      }
+
+      .rank-col {
+        width: 40px;
+        font-weight: 700;
+        color: #198754;
+        text-align: center;
+      }
+
+      .val-col {
+        text-align: right;
+        font-weight: 600;
+        color: #0d6efd;
+      }
+
+      .city-sub {
+        font-size: 0.8em;
+        color: #999;
+      }
+
+      .score-badge {
+        background: #19875420;
+        color: #198754;
+        font-weight: 700;
+        padding: 4px 12px;
+        border-radius: 40px;
+        border: 1px solid #19875440;
+        font-size: 0.9rem;
+        display: inline-block;
+      }
+
+      /* Custom scrollbar */
+      .ranking-table::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .ranking-table::-webkit-scrollbar-track {
+        background: #e6f2ff;
+        border-radius: 10px;
+      }
+      .ranking-table::-webkit-scrollbar-thumb {
+        background: #80b0ff;
+        border-radius: 10px;
+      }
+
+      .narrow-screen-note {
+        display: none;
+        max-width: 2300px;
+        margin: -12px auto 10px auto;
+        padding: 8px 12px;
+        background: #fff7d6;
+        border: 1px solid #f0d47a;
+        border-radius: 10px;
+        color: #5c4600;
+        font-size: 0.78rem;
+        line-height: 1.3;
+        box-sizing: border-box;
+      }
+
       .map-legend-note {
         max-width: 2300px;
         margin: 8px auto 14px auto;
