@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BFI Clean Viewer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background:#0f172a; color:#cbd5e1; }
+    .panel { background:#1e293b; border:1px solid #334155; border-radius:12px; }
+    .btn { background:#334155; border:1px solid #475569; color:#cbd5e1; border-radius:8px; padding:7px 9px; font-size:12px; font-weight:800; transition:.15s; }
+    .btn:hover { background:#475569; color:white; }
+    .btn.active { background:#2563eb; border-color:#60a5fa; color:white; box-shadow:0 0 0 1px #60a5fa55; }
+    .btn.warn.active { background:#dc2626; border-color:#f87171; }
+    .btn.orange.active { background:#d97706; border-color:#fbbf24; }
+    .btn.purple.active { background:#9333ea; border-color:#c084fc; }
+    .label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; font-weight:900; }
+    .stat { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:10px; text-align:center; }
+    .stat .v { color:white; font-size:24px; line-height:1; font-weight:1000; }
+    .stat .s { color:#64748b; font-size:11px; margin-top:4px; }
+    .leaflet-control-attribution { background:#0f172acc !important; color:#94a3b8 !important; }
+
+    .pin-icon { border-radius:999px; display:flex; justify-content:center; align-items:center; color:#0f172a; font-weight:1000; line-height:1; box-shadow:0 2px 8px rgba(0,0,0,.45); border:2px solid white; }
+    .leaflet-marker-icon.pin-wrapper { background:transparent; border:0; }
+    .reach-chip { background:#0f172a; border:1px solid #334155; border-radius:999px; padding:5px 9px; color:#bae6fd; }
+    .key-block { background:#0f172a; border:1px solid #334155; border-radius:8px; padding:7px; margin-top:7px; color:#cbd5e1; }
+    .key-title { font-weight:1000; color:#e2e8f0; margin-bottom:5px; }
+    .key-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 8px; }
+    .key-item { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+    .swatch { width:10px; height:10px; border-radius:999px; border:1px solid #e2e8f0aa; display:inline-block; flex:0 0 auto; }
+  </style>
+</head>
+<body class="h-screen p-4 overflow-hidden">
+  <div class="h-full flex flex-col gap-4">
+    <header class="flex flex-wrap items-center justify-between gap-3 shrink-0">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Clean Viewer</h1>
+        <p class="text-xs text-slate-400">Import saved <b>.bfiana/.json</b> analysis files or a <b>.zip</b> containing them. No analysis code, no OSM fetching, no batch runner.</p>
+      </div>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button class="btn" onclick="document.getElementById('fileInput').click()">Upload analysis files / zip</button>
+        <input id="fileInput" type="file" class="hidden" multiple accept=".bfiana,.json,.zip" onchange="handleFiles(this.files)" />
+        <select id="datasetSelect" class="bg-slate-900 border border-slate-600 rounded-lg text-sm px-3 py-2 text-white min-w-64" onchange="selectDataset(this.value)"></select>
+        <div class="flex rounded-full bg-slate-900 border border-slate-700 p-1">
+          <button id="modeAddress" class="btn active rounded-full" onclick="setMode('address')">Address</button>
+          <button id="modeCity" class="btn rounded-full" onclick="setMode('city')">City</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex gap-4 min-h-0 grow">
+      <aside class="w-[330px] shrink-0 flex flex-col gap-4 min-h-0">
+        <section class="panel p-4 space-y-4 overflow-y-auto">
+          <div>
+            <div class="label mb-2">Loaded files</div>
+            <div id="fileSummary" class="text-xs text-slate-400 leading-relaxed">No files loaded yet.</div>
+          </div>
+
+          <div id="cityControls" class="hidden space-y-4">
+            <div>
+              <div class="label mb-2">City aggregation</div>
+              <div class="grid grid-cols-2 gap-2">
+                <button id="agg-citywide" class="btn active" onclick="setCityAggregation('citywide')">City Wide</button>
+                <button id="agg-best" class="btn" onclick="setCityAggregation('best')">Best Area</button>
+              </div>
+            </div>
+            <div>
+              <div class="label mb-2">Points view</div>
+              <div class="grid grid-cols-3 gap-2">
+                <button id="points-rank" class="btn active" onclick="setPointsView('rank')">Ranking</button>
+                <button id="points-score" class="btn" onclick="setPointsView('score')">Score</button>
+                <button id="points-hide" class="btn" onclick="setPointsView('hide')">Hide</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="addressControls" class="space-y-4">
+            <div>
+              <div class="label mb-2">Address map</div>
+              <div class="grid grid-cols-3 gap-2">
+                <button id="view-none" class="btn active" onclick="setAddressView('none')">None</button>
+                <button id="view-gradient" class="btn" onclick="setAddressView('gradient')">Gradient</button>
+                <button id="view-routes" class="btn" onclick="setAddressView('routes')">Routes</button>
+              </div>
+            </div>
+            <div>
+              <div class="flex justify-between items-end mb-2"><div class="label">Danger tolerance</div><div id="tolLabel" class="text-sm text-blue-400 font-black">50</div></div>
+              <input id="tolSlider" type="range" min="25" max="100" step="25" value="50" class="w-full" oninput="setTolerance(this.value)" />
+              
+            </div>
+          </div>
+
+          <div>
+            <div class="label mb-2">Scoring focus</div>
+            <div class="grid grid-cols-3 gap-2">
+              <button id="focus-infra" class="btn" onclick="setFocus('infra')">Infra</button>
+              <button id="focus-balanced" class="btn active" onclick="setFocus('balanced')">Balanced</button>
+              <button id="focus-dest" class="btn" onclick="setFocus('dest')">Dest</button>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-700">
+            <div class="label mb-2 text-red-300">Overlays</div>
+            <div class="space-y-2">
+              <button id="ov-bad" class="btn warn w-full" onclick="toggleOverlay('bad')">⚠️ Higher Risk Intersections</button>
+              <button id="ov-stress" class="btn orange w-full" onclick="toggleOverlay('stress')">🌈 Stress Heatmap</button>
+              <button id="ov-type" class="btn w-full" onclick="toggleOverlay('type')">🗺️ Network Type</button>
+              <button id="ov-dest" class="btn purple w-full" onclick="toggleOverlay('dest')">📍 Destinations</button>
+            </div>
+            <div id="legend" class="text-[10px] text-slate-500 mt-2 min-h-4"></div>
+          </div>
+        </section>
+
+        <section class="panel p-4 grow min-h-0 overflow-y-auto">
+          <div class="label mb-2">Details</div>
+          <div id="details" class="text-xs text-slate-400 leading-relaxed">Upload a saved analysis file to begin.</div>
+        </section>
+      </aside>
+
+      <section class="grow min-w-0 flex flex-col gap-4">
+        <div class="grid grid-cols-2 lg:grid-cols-6 gap-2 shrink-0">
+          <div class="stat"><div class="label text-orange-400">Safe area</div><div id="stArea" class="v">0.00</div><div class="s">sq mi avg</div></div>
+          <div class="stat"><div class="label text-green-400">Bike network</div><div id="stBike" class="v">0.0</div><div class="s">mi avg</div></div>
+          <div class="stat"><div class="label text-blue-400">Total network</div><div id="stTotal" class="v">0.0</div><div class="s">mi avg</div></div>
+          <div class="stat"><div class="label text-yellow-400">Dest score</div><div id="stDest" class="v">0</div><div class="s">avg points</div></div>
+          <div class="stat"><div class="label text-red-400">Higher Risk Intersections</div><div id="stBad" class="v">0.00</div><div class="s">per mile avg</div></div>
+          <div class="stat border-purple-500/50"><div class="label text-purple-300">Score</div><div id="stScore" class="v text-purple-300">0</div><div class="s" id="scoreSub">balanced</div></div>
+        </div>
+
+        <div class="panel p-3 shrink-0">
+          <div class="flex justify-between text-[11px] text-slate-400 font-black mb-2">
+            <span>Network composition</span><span><span style="color:#16a34a">Paths</span> · <span style="color:#2563eb">Lanes</span> · <span style="color:#ffee58">Friendly</span> · <span style="color:#ef4444">Roads</span> · <span style="color:#b38804">Other</span></span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-700 overflow-hidden flex">
+            <div id="barPath" style="background:#16a34a;width:0%"></div><div id="barLane" style="background:#2563eb;width:0%"></div><div id="barFriendly" style="background:#ffee58;width:0%"></div><div id="barRoad" style="background:#ef4444;width:0%"></div><div id="barOther" style="background:#b38804;width:0%"></div>
+          </div>
+          <div class="label mt-3 mb-1 text-blue-300">Furthest Reach</div>
+          <div id="reach" class="flex flex-wrap gap-2 text-sm text-blue-300 font-black">No data</div>
+        </div>
+
+        <div class="grow min-h-0 rounded-xl overflow-hidden border border-slate-600 relative bg-slate-900">
+          <div id="map" class="h-full w-full"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+<script>
+const state = {
+  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'rank', tolerance:'50',
+  datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false}
+};
+let map, layers = {}, zoomRenderTimer = null;
+
+function initMap(){
+  map = L.map('map', { zoomControl:true }).setView([39.8283,-98.5795], 4);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
+  ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
+  map.on('zoomend', () => { clearTimeout(zoomRenderTimer); zoomRenderTimer = setTimeout(() => render(), 60); });
+}
+
+function resetLayers(){ Object.values(layers).forEach(l => l.clearLayers()); }
+function activeDataset(){ return state.datasets.find(d => d.id === state.currentId) || null; }
+function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
+function fmtSig(n, sig=1){ return Number.isFinite(+n) ? String(Number((+n).toPrecision(sig))) : '0'; }
+function colorForScore(score){ const s=Math.max(0,Math.min(100,score||0)); return `hsl(${Math.round(s*1.2)}, 90%, 50%)`; }
+function dynamicWeight(r=1){ const z = map ? map.getZoom() : 12; return Math.max(1, (z - 10) * 1.4) * r; }
+function makePin(label, color, size=24, border='white', opacity=.95){
+  const safe = escapeHtml(label);
+  return L.divIcon({
+    className:'pin-wrapper',
+    html:`<div class="pin-icon" style="width:${size}px;height:${size}px;background:${color};border-color:${border};opacity:${opacity};font-size:${String(safe).length>2 ? 9 : 11}px">${safe}</div>`,
+    iconSize:[size,size],
+    iconAnchor:[size/2,size/2]
+  });
+}
+
+async function handleFiles(fileList){
+  const files = Array.from(fileList || []);
+  let added = 0;
+  const addedKinds = new Set();
+  let lastAddedId = null, lastAddedKind = null;
+
+  function note(item){
+    if (!item) return;
+    added += 1;
+    addedKinds.add(item.kind);
+    lastAddedId = item.id;
+    lastAddedKind = item.kind;
+  }
+
+  for (const file of files) {
+    if (file.name.toLowerCase().endsWith('.zip')) {
+      const zip = await JSZip.loadAsync(file);
+      for (const name of Object.keys(zip.files)) {
+        if (/\.(bfiana|json)$/i.test(name) && !zip.files[name].dir) {
+          note(await ingestText(await zip.files[name].async('string'), name));
+        }
+      }
+    } else if (/\.(bfiana|json)$/i.test(file.name)) {
+      note(await ingestText(await file.text(), file.name));
+    }
+  }
+
+  updateFileSummary();
+  if (added) {
+    if (addedKinds.size === 1) {
+      state.mode = lastAddedKind;
+      state.currentId = lastAddedId;
+    } else if (!state.datasets.some(d => d.id === state.currentId && d.kind === state.mode)) {
+      state.currentId = lastAddedId;
+      state.mode = lastAddedKind;
+    }
+    state.autoFitPending = true;
+    syncModeButtons();
+    rebuildSelect();
+    render();
+  }
+  document.getElementById('fileInput').value = '';
+  if (!added) alert('No valid .bfiana/.json analysis files found.');
+}
+
+async function ingestText(text, name){
+  try {
+    const data = JSON.parse(text);
+    if (data.type === 'raw_osm_cache') return null;
+    const kind = data.appMode === 'city' || data.lastCityRawResults ? 'city' : 'address';
+    const label = kind === 'city' ? (data.cityInput || data.cityMetadata?.city || name) : (data.addressInput || name);
+    const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const item = { id, name, label, kind, data };
+    state.datasets.push(item);
+    return item;
+  } catch { return null; }
+}
+
+function rebuildSelect(){
+  const sel = document.getElementById('datasetSelect');
+  sel.innerHTML = '';
+  const filtered = state.datasets.filter(d => d.kind === state.mode);
+  if (!filtered.length) {
+    sel.innerHTML = `<option value="">No ${state.mode} files loaded</option>`;
+    return;
+  }
+  filtered.forEach(d => {
+    const o = document.createElement('option'); o.value = d.id; o.textContent = `${d.kind.toUpperCase()} · ${d.label}`; sel.appendChild(o);
+  });
+  if (!filtered.some(d => d.id === state.currentId)) state.currentId = filtered[0].id;
+  sel.value = state.currentId;
+}
+
+function updateFileSummary(){
+  const city = state.datasets.filter(d=>d.kind==='city').length;
+  const addr = state.datasets.filter(d=>d.kind==='address').length;
+  const shownCities = state.datasets.filter(d=>d.kind==='city').slice(0,3).map(d=>`• ${escapeHtml(d.label)}`).join('<br>');
+  const shownAddr = state.datasets.filter(d=>d.kind==='address').slice(0,1).map(d=>`• ${escapeHtml(d.label)}`).join('<br>');
+  document.getElementById('fileSummary').innerHTML = `${addr} address file(s), ${city} city file(s) loaded.<br><br><span class="text-slate-500">Reference slots:</span><br>${shownCities || '• no city refs yet'}<br>${shownAddr || '• no address ref yet'}`;
+}
+function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function syncModeButtons(){
+  document.getElementById('modeAddress').classList.toggle('active', state.mode==='address');
+  document.getElementById('modeCity').classList.toggle('active', state.mode==='city');
+  document.getElementById('addressControls').classList.toggle('hidden', state.mode!=='address');
+  document.getElementById('cityControls').classList.toggle('hidden', state.mode!=='city');
+}
+function selectDataset(id){ state.currentId = id; state.autoFitPending = true; render(); }
+function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
+function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
+function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
+function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
+function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
+function setTolerance(v){ state.tolerance=String(v); document.getElementById('tolLabel').textContent=v; render(); }
+function toggleOverlay(name){
+  state.overlays[name]=!state.overlays[name];
+  if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
+  if (name === 'type' && state.overlays.type) state.overlays.stress = false;
+  ['bad','stress','type','dest'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
+  render();
+}
+
+function score(m, focus=state.focus){
+  if (!m) return 0;
+  const area = Math.pow(Math.max(0, m.areaSqMi||0), .65) * 2;
+  const adjustedTotal = Math.max(1, (m.totalLen||0) - (m.otherLen||0));
+  const weightedBike = (m.pathLen||0) + .75*(m.laneLen||0) + .25*(m.friendlyLen||0);
+  let pNet = ((m.totalLen||0) > 0 ? weightedBike / adjustedTotal : 0) * 150;
+  const physical = (m.pathLen||0) + (m.laneLen||0);
+  pNet = Math.min(pNet, physical * 3);
+  const pTotal = Math.pow(Math.max(0, m.totalLen||0), .5);
+  let density = Math.sqrt(Math.max(0, m.destScore||0) / adjustedTotal); density = Math.min(density, 4);
+  const destBase = density * Math.max(0, m.destScore||0);
+  let curve = 0; if (destBase > 0) curve = destBase < 20000 ? Math.pow(destBase,.35) : Math.pow(destBase,.30)+12.503;
+  const pDest = curve * 5;
+  let pReach = 0;
+  const r = m.reachPoints || [];
+  if (r[0]?.dir === 'AVG_NUMERIC') pReach = ((r[0].d||0)/1.5)+((r[0].d2||0)/2)+((r[0].d3||0)/2.5);
+  else pReach = ((r[0]?.d||0)/1.5)+((r[1]?.d||0)/2)+((r[2]?.d||0)/2.5);
+  let mInfra=1.1, mDest=.7;
+  if (focus==='infra') { mInfra=1.6; mDest=.2; }
+  if (focus==='dest') { mInfra=.6; mDest=1.2; }
+  const raw = (area*mInfra)+(pNet*mInfra)+(pTotal*mInfra)+(pDest*mDest)+(pReach*mInfra);
+  let out = Math.pow(Math.max(0,raw), .5)*5; if (out > raw) out = raw;
+  return Math.max(1, out - 4);
+}
+
+function citySubset(data){
+  const raw = (data.lastCityRawResults || []).filter(s => ['valid','used','high_outlier','low_outlier'].includes(s.status));
+  raw.forEach(s => { s._score = score(s, state.focus); });
+  const sorted = [...raw].sort((a,b) => (b._score-a._score) || ((b.destScore||0)-(a.destScore||0)) || ((b.areaSqMi||0)-(a.areaSqMi||0)) || ((b.lat||0)-(a.lat||0)));
+  sorted.forEach((s,i)=>s._rank=i+1);
+  if (!sorted.length) return [];
+  if (state.cityAgg === 'best') return sorted.slice(0, Math.max(1, Math.floor(sorted.length*.20)));
+  const start = Math.floor(sorted.length*.06), end = sorted.length - Math.floor(sorted.length*.25);
+  return sorted.slice(start, Math.max(start+1,end));
+}
+
+function avgMetrics(list){
+  if (!list.length) return null;
+  const avg = k => list.reduce((a,b)=>a+(+b[k]||0),0)/list.length;
+  const count = list.length || 1;
+  const r1 = list.reduce((a,s)=>a+(s.reachPoints?.[0]?.d||0),0)/count;
+  const r2 = list.reduce((a,s)=>a+(s.reachPoints?.[1]?.d||0),0)/count;
+  const r3 = list.reduce((a,s)=>a+(s.reachPoints?.[2]?.d||0),0)/count;
+  return { areaSqMi:avg('areaSqMi'), pathLen:avg('pathLen'), laneLen:avg('laneLen'), friendlyLen:avg('friendlyLen'), roadLen:avg('roadLen'), otherLen:avg('otherLen'), totalLen:avg('totalLen'), destScore:avg('destScore'), badIntPerMi:avg('badIntPerMi'), reachPoints:[{dir:'AVG_NUMERIC', d:r1, d2:r2, d3:r3}] };
+}
+
+function currentMetrics(){
+  const ds = activeDataset(); if (!ds) return null;
+  if (ds.kind === 'address') {
+    const variants = ds.data.addressVariants || {};
+    return variants[state.tolerance] || ds.data.lastMetrics || null;
+  }
+  return avgMetrics(citySubset(ds.data));
+}
+
+function render(){
+  resetLayers();
+  rebuildSelect();
+  const ds = activeDataset();
+  if (!ds) { updateStats(null); document.getElementById('details').innerHTML='Upload a saved analysis file to begin.'; return; }
+  const data = ds.data, m = currentMetrics();
+  updateStats(m);
+  drawBoundary(data);
+  if (ds.kind === 'address') drawAddress(data, m); else drawCity(data, m);
+  drawOverlays(data, m);
+  updateDetails(ds, m);
+  state.autoFitPending = false;
+}
+
+function updateStats(m){
+  document.getElementById('stArea').textContent = fmt(m?.areaSqMi,2);
+  document.getElementById('stBike').textContent = fmt((m?.pathLen||0)+(m?.laneLen||0),1);
+  document.getElementById('stTotal').textContent = fmt(m?.totalLen,1);
+  document.getElementById('stDest').textContent = Math.round(m?.destScore||0);
+  document.getElementById('stBad').textContent = fmt(m?.badIntPerMi,2);
+  document.getElementById('stScore').textContent = Math.round(score(m));
+  document.getElementById('scoreSub').textContent = state.focus;
+  const total = Math.max(.1, m?.totalLen||0);
+  [['barPath',m?.pathLen],['barLane',m?.laneLen],['barFriendly',m?.friendlyLen],['barRoad',m?.roadLen],['barOther',m?.otherLen]].forEach(([id,v])=>document.getElementById(id).style.width=`${100*(v||0)/total}%`);
+  let html = '<span class="text-slate-500 italic">No data</span>';
+  const r = m?.reachPoints || [];
+  if (r[0]?.dir === 'AVG_NUMERIC') {
+    html = [
+      ['#1 average', r[0].d],
+      ['#2 average', r[0].d2],
+      ['#3 average', r[0].d3]
+    ].map(([label, dist]) => `<span class="reach-chip"><span class="text-slate-400">${label}</span> ${fmt(dist,1)} mi</span>`).join('');
+  } else if (r.length) {
+    html = r.slice(0,3).map((p,i)=>`<span class="reach-chip"><span class="text-slate-400">#${i+1}</span> ${p.dir ? escapeHtml(p.dir) + ' · ' : ''}${fmt(p.d,1)} mi</span>`).join('');
+  }
+  document.getElementById('reach').innerHTML = html;
+}
+
+function drawBoundary(data){
+  if (data.lastCityGeoJSON) {
+    const g = L.geoJSON(data.lastCityGeoJSON, { style:{ color:'#020617', weight:3, fill:false, opacity:.9 } }).addTo(layers.boundary);
+    if (state.autoFitPending) { try { map.fitBounds(g.getBounds(), {padding:[25,25]}); } catch{} }
+  }
+}
+
+function drawAddress(data, m){
+  const c = data.coords || (m?.startCoords ? {lat:m.startCoords.lat,lng:m.startCoords.lon} : null);
+  if (c) { L.marker([c.lat, c.lng]).bindPopup(data.addressInput || 'Start address').addTo(layers.points); if (state.autoFitPending) map.setView([c.lat,c.lng], 12); }
+  if (!m) return;
+  drawHull(m);
+  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main);
+  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main);
+  drawReachPoints(m);
+}
+
+function drawCity(data){
+  const subset = citySubset(data);
+  if (state.pointsView !== 'hide') {
+    const all = (data.lastCityRawResults || []).filter(s => ['valid','used','high_outlier','low_outlier'].includes(s.status));
+    all.sort((a,b)=>(a._rank||9999)-(b._rank||9999)).forEach(s => {
+      const inSubset = subset.includes(s);
+      let col = inSubset ? '#22c55e' : '#64748b';
+      if (s.status === 'high_outlier') col = '#3b82f6';
+      if (s.status === 'low_outlier') col = '#f97316';
+      if (!inSubset && !['high_outlier','low_outlier'].includes(s.status)) col = '#475569';
+      const label = state.pointsView === 'score' ? Math.round(score(s,state.focus)) : (s._rank || '—');
+      const size = inSubset ? 24 : 20;
+      const border = s.hitCutoff ? '#a855f7' : 'white';
+      const opacity = inSubset || s.status === 'high_outlier' || s.status === 'low_outlier' ? .96 : .55;
+      L.marker([s.lat,s.lon], { icon: makePin(label, col, size, border, opacity) })
+        .bindPopup(`<b>${inSubset?'Included':'Excluded'} sample</b><br>Rank: ${s._rank || '-'}<br>Score: ${fmt(score(s,state.focus),1)}<br>Area: ${fmt(s.areaSqMi,2)} sq mi`)
+        .addTo(layers.points);
+    });
+  }
+  const best = subset[0];
+  if (best?.reachPoints) drawReachPoints(best);
+  if (state.autoFitPending && !data.lastCityGeoJSON && subset[0]) map.setView([subset[0].lat, subset[0].lon], 11);
+}
+
+function drawHull(m){
+  const geo = m.hullLow || m.hullGrid || m.hullSmooth;
+  if (!geo) return;
+  const g = L.geoJSON(geo, { style:{ color:'#3b82f6', weight:2, fillColor:'#3b82f6', fillOpacity:.13 } }).addTo(layers.hull);
+  if (state.autoFitPending) { try { map.fitBounds(g.getBounds(), {padding:[25,25]}); } catch{} }
+  if (m.hullSmooth) L.geoJSON(m.hullSmooth, { style:{ color:'#ef4444', weight:2, fill:false } }).addTo(layers.hull);
+}
+
+function drawGradient(buckets, layer){
+  (buckets||[]).forEach((lines,i)=>{ if(lines?.length) L.polyline(lines, { color:`hsl(${120-i*13},100%,50%)`, weight:dynamicWeight(1), opacity:.75 }).addTo(layer); });
+}
+function drawRoutes(lines, layer){
+  (lines||[]).forEach(l => { if(l.seg) L.polyline(l.seg, { color:'#16a34a', weight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }).addTo(layer); });
+}
+function drawReachPoints(m){
+  (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
+    if (p.lat && p.lon) L.circleMarker([p.lat,p.lon], { radius:9, color:'#67e8f9', fillColor:'#020617', fillOpacity:.7, weight:3 }).bindPopup(`<b>Furthest Reach #${i+1}</b><br>${fmt(p.d,1)} mi ${p.dir||''}`).addTo(layers.reach);
+  });
+}
+
+function drawOverlays(data, m){
+  const keys = [];
+  if (state.overlays.bad) {
+    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
+    pts.forEach(p => {
+      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+      L.circleMarker([p.lat,p.lon], { radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
+        .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
+        .addTo(layers.bad);
+    });
+    keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
+  }
+  if (state.overlays.stress) {
+    const cityStress = data.cityLines?.stress;
+    const addrStress = m?.lines?.stress;
+    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress);
+    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress);
+    keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
+  }
+  if (state.overlays.type) {
+    const c = data.cityLines?.classification;
+    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type);
+    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type);
+    keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
+  }
+  if (state.overlays.dest) {
+    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
+    pois.forEach(p => {
+      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+      L.circleMarker([p.lat,p.lon], { radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 }).bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`).addTo(layers.dest);
+    });
+    keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
+  }
+  document.getElementById('legend').innerHTML = keys.join('');
+}
+function keyBlock(title, items){
+  return `<div class="key-block"><div class="key-title">${title}</div><div class="key-grid">${items.map(([label,color])=>`<div class="key-item"><span class="swatch" style="background:${color}"></span>${label}</div>`).join('')}</div></div>`;
+}
+function drawStressBuckets(b, layer){
+  [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{ if(b[k]?.length) L.polyline(b[k], { color:c, weight:dynamicWeight(r), opacity:.62 }).addTo(layer); });
+}
+function drawTypeBuckets(b, layer){
+  [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{ if(b[k]?.length) L.polyline(b[k], { color:c, weight:dynamicWeight(r), opacity:.65 }).addTo(layer); });
+}
+
+function updateDetails(ds, m){
+  const data = ds.data;
+  const cityInfo = ds.kind==='city' ? `<br>Samples: ${(data.lastCityRawResults||[]).length}<br>Included in current average: ${citySubset(data).length}` : '';
+  const variants = ds.kind==='address' ? `<br>Danger variants: ${data.addressVariants ? Object.keys(data.addressVariants).join(', ') : 'not included in file'}` : '';
+  document.getElementById('details').innerHTML = `<b class="text-white">${escapeHtml(ds.label)}</b><br>Source: ${escapeHtml(ds.name)}<br>Mode: ${ds.kind}<br>Focus: ${state.focus}<br>Displayed score: ${fmt(score(m),1)}${cityInfo}${variants}<br><br><span class="text-slate-500">Tip: turn on overlays, then use “Hide” in city points view when you only want the overlay map.</span>`;
+}
+
+window.addEventListener('load', initMap);
+</script>
+</body>
+</html>
