@@ -48,7 +48,7 @@
   <div class="h-full flex flex-col gap-4">
     <header class="flex flex-wrap items-center justify-between gap-3 shrink-0">
       <div>
-        <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta Samples</h1>
+        <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta</h1>
       </div>
       <div class="flex flex-wrap gap-2 items-center">
         <button class="btn" onclick="document.getElementById('fileInput').click()">Upload analysis files / zip</button>
@@ -75,8 +75,8 @@
             <div>
               <div class="label mb-2">Points view</div>
               <div class="grid grid-cols-3 gap-2">
-                <button id="points-rank" class="btn active" onclick="setPointsView('rank')">Ranking</button>
-                <button id="points-score" class="btn" onclick="setPointsView('score')">Score</button>
+                <button id="points-rank" class="btn" onclick="setPointsView('rank')">Ranking</button>
+                <button id="points-score" class="btn active" onclick="setPointsView('score')">Score</button>
                 <button id="points-hide" class="btn" onclick="setPointsView('hide')">Hide</button>
               </div>
             </div>
@@ -125,10 +125,7 @@
               <div id="sampleProgressBar" class="h-full bg-blue-600" style="width:0%"></div>
             </div>
             <div class="mt-2 flex gap-2">
-              <select id="samplePrioritySelect" class="bg-slate-900 border border-slate-600 rounded-lg text-xs px-2 py-2 text-white min-w-0 grow">
-                <option value="">Finding samples...</option>
-              </select>
-              <button class="btn shrink-0" onclick="prioritizeSelectedSample()">Load next</button>
+              <button id="openSamplePickerBtn" class="btn w-full" onclick="openSamplePicker()">Choose additional samples</button>
             </div>
           </div>
 
@@ -167,11 +164,33 @@
     </main>
   </div>
 
+  <div id="samplePickerModal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/80 z-[9999] p-4">
+    <div class="panel w-full max-w-xl p-5 shadow-2xl border-blue-500/50">
+      <div class="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <h2 class="text-xl font-black text-white">Load more samples</h2>
+          <p class="text-xs text-slate-400 mt-1">Mackinac Island starts loaded. Pick up to two additional hosted analyses to keep memory sane.</p>
+        </div>
+        <button class="btn" onclick="closeSamplePicker()">Close</button>
+      </div>
+      <div id="samplePickerList" class="max-h-[45vh] overflow-y-auto rounded-lg border border-slate-700 bg-slate-950/60 p-2 text-sm">
+        Finding hosted samples...
+      </div>
+      <div class="mt-3 flex items-center justify-between gap-3">
+        <div id="samplePickerNote" class="text-xs text-slate-400">0 / 2 selected</div>
+        <div class="flex gap-2">
+          <button class="btn" onclick="closeSamplePicker()">Not now</button>
+          <button id="loadSelectedSamplesBtn" class="btn active" onclick="loadSelectedSamplesFromPicker()">Load selected</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
 const state = {
-  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'rank', tolerance:'50',
+  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'score', tolerance:'50',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
-  sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[]
+  sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -183,8 +202,8 @@ const FALLBACK_EMBEDDED_ANALYSES = [
   }
 ];
 
-const SAMPLE_SET_NAME = 'BFI Viewer Beta Samples';
-const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
+const SAMPLE_SET_NAME = 'BFI Viewer Beta';
+const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta.json';
 const SAMPLE_FILE_PATHS = [
   'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
   'sample-files/Helsinki_Finland.viewer-pruned.zip',
@@ -268,8 +287,15 @@ function normalizeSampleEntry(entry){
   return null;
 }
 
+function isColumbusSample(entry){
+  const raw = String(entry?.name || entry?.url || entry?.label || '');
+  return /39\.98404_-83|columbus/i.test(raw);
+}
+
 function prettifySampleLabel(name){
-  return String(name || '')
+  const raw = String(name || '');
+  if (/39\.98404_-83/i.test(raw)) return 'Columbus, OH Address Analysis';
+  return raw
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
     .replace(/_/g, ' ')
@@ -298,7 +324,7 @@ function addSampleEntries(target, entries){
 async function resolveSampleFiles(){
   const byKey = new Map();
 
-  // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta Samples.json.
+  // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta.json.
   // It can be either ["sample-files/file.zip", ...] or { "files": [ ... ] }.
   try {
     const manifestResponse = await fetch(encodeURI(SAMPLE_MANIFEST_PATH), { cache: 'no-store' });
@@ -330,31 +356,146 @@ async function resolveSampleFiles(){
 
   // Final safety net: known files from the sample-files folder. Exact spelling/capitalization matters.
   addSampleEntries(byKey, SAMPLE_FILE_PATHS);
-  return [...byKey.values()];
+  return [...byKey.values()].sort((a, b) => {
+    const ca = isColumbusSample(a) ? -1 : 0;
+    const cb = isColumbusSample(b) ? -1 : 0;
+    if (ca !== cb) return ca - cb;
+    return sampleLabel(a).localeCompare(sampleLabel(b));
+  });
 }
 
 function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
 
+function pendingSampleEntries(){
+  return state.sampleEntries.filter(entry => !state.sampleLoadedKeys.has(sampleKey(entry)));
+}
+
 function populateSamplePrioritySelect(){
-  const sel = document.getElementById('samplePrioritySelect');
-  if (!sel) return;
-  const pending = state.sampleEntries.filter(entry => !state.sampleLoadedKeys.has(sampleKey(entry)));
-  sel.innerHTML = '';
+  const btn = document.getElementById('openSamplePickerBtn');
+  if (btn) {
+    const pendingCount = pendingSampleEntries().length;
+    btn.textContent = pendingCount ? `Choose additional samples (${pendingCount} available)` : 'All hosted samples loaded';
+    btn.disabled = state.sampleLoading || !pendingCount;
+  }
+  renderSamplePickerList();
+}
+
+function openSamplePicker(){
+  renderSamplePickerList();
+  const modal = document.getElementById('samplePickerModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeSamplePicker(){
+  const modal = document.getElementById('samplePickerModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+
+function selectedSampleKeys(){
+  return Array.from(document.querySelectorAll('.sample-pick:checked')).map(box => box.value);
+}
+
+function updateSamplePickerControls(){
+  const boxes = Array.from(document.querySelectorAll('.sample-pick'));
+  const selected = boxes.filter(box => box.checked);
+  const atLimit = selected.length >= 2;
+  boxes.forEach(box => {
+    box.disabled = state.sampleLoading || state.sampleLoadedKeys.has(box.value) || (!box.checked && atLimit);
+  });
+  const note = document.getElementById('samplePickerNote');
+  if (note) note.textContent = state.sampleLoading ? 'Loading selected samples...' : `${selected.length} / 2 selected`;
+  const loadBtn = document.getElementById('loadSelectedSamplesBtn');
+  if (loadBtn) loadBtn.disabled = state.sampleLoading || selected.length < 1;
+}
+
+function onSampleCheckboxChange(box){
+  if (selectedSampleKeys().length > 2) box.checked = false;
+  updateSamplePickerControls();
+}
+
+function renderSamplePickerList(){
+  const list = document.getElementById('samplePickerList');
+  if (!list) return;
+  const pending = pendingSampleEntries();
   if (!pending.length) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = state.sampleLoading ? 'Finishing current file...' : 'All hosted samples loaded';
-    sel.appendChild(option);
+    list.innerHTML = `<div class="text-slate-400 p-2">No hosted samples left to load.</div>`;
+    updateSamplePickerControls();
     return;
   }
-  pending.forEach(entry => {
-    const option = document.createElement('option');
-    option.value = sampleKey(entry);
-    option.textContent = sampleLabel(entry);
-    sel.appendChild(option);
-  });
+
+  const shouldPreselectColumbus = !state.samplePickerPreselected && pending.some(isColumbusSample);
+  const html = pending.map(entry => {
+    const key = sampleKey(entry);
+    const isColumbus = isColumbusSample(entry);
+    const checked = shouldPreselectColumbus && isColumbus ? 'checked' : '';
+    const badge = isColumbus ? '<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-900/70 text-blue-200 border border-blue-500/40">address</span>' : '<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-600">city</span>';
+    return `<label class="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-800/80 cursor-pointer">
+      <input class="sample-pick" type="checkbox" value="${escapeHtml(key)}" ${checked} onchange="onSampleCheckboxChange(this)" />
+      <span class="min-w-0 grow"><span class="text-white font-bold">${escapeHtml(sampleLabel(entry))}</span>${badge}<br><span class="text-[11px] text-slate-500">${escapeHtml(entry.name || entry.url || '')}</span></span>
+    </label>`;
+  }).join('');
+  list.innerHTML = html;
+  if (shouldPreselectColumbus) state.samplePickerPreselected = true;
+  updateSamplePickerControls();
+}
+
+async function loadSelectedSamplesFromPicker(){
+  const keys = selectedSampleKeys();
+  if (!keys.length || state.sampleLoading) return;
+  await loadSelectedSampleEntries(keys.slice(0, 2));
+  closeSamplePicker();
+}
+
+async function loadSelectedSampleEntries(keys){
+  if (!window.JSZip) { updateFileSummary(); setSampleStatus('JSZip is unavailable, so hosted samples cannot load.', 0, 0); return 0; }
+  const uniqueKeys = [...new Set(keys || [])].filter(key => key && !state.sampleLoadedKeys.has(key)).slice(0, 2);
+  if (!uniqueKeys.length) return 0;
+
+  state.sampleLoading = true;
+  populateSamplePrioritySelect();
+  let added = 0;
+  let loadedFiles = 0;
+  const total = uniqueKeys.length;
+
+  for (const key of uniqueKeys) {
+    const entry = state.sampleEntries.find(e => sampleKey(e) === key);
+    if (!entry) continue;
+    const label = sampleLabel(entry);
+    try {
+      setSampleStatus(`Loading ${label}...`, loadedFiles, total);
+      const result = await loadZipAnalysisFromUrl(entry, phase => setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total));
+      state.sampleLoadedKeys.add(key);
+      loadedFiles += 1;
+      added += result.added;
+      showNewDataset(result.lastItem);
+      setSampleStatus(`Loaded ${label}.`, loadedFiles, total);
+    } catch (err) {
+      state.sampleLoadedKeys.add(key);
+      loadedFiles += 1;
+      const msg = `${label}: ${err.message || err}`;
+      state.sampleErrors.push(msg);
+      console.warn(`Could not load ${SAMPLE_SET_NAME} file:`, entry.url, err);
+      setSampleStatus(`Skipped ${label}; continuing...`, loadedFiles, total);
+    }
+    await nextPaint();
+  }
+
+  state.sampleLoading = false;
+  updateFileSummary();
+  rebuildSelect();
+  populateSamplePrioritySelect();
+  setSampleStatus(
+    added ? `Loaded ${added} selected hosted analysis file(s).` : 'No selected hosted analysis files loaded.',
+    loadedFiles,
+    total
+  );
+  return added;
 }
 
 function setSampleStatus(message, done = null, total = null){
@@ -365,7 +506,7 @@ function setSampleStatus(message, done = null, total = null){
       ? `<br><span class="text-red-300">${state.sampleErrors.length} failed:</span> ${state.sampleErrors.slice(-2).map(escapeHtml).join('<br>')}`
       : '';
     const countHtml = Number.isFinite(done) && Number.isFinite(total) && total > 0
-      ? `<br><span class="text-slate-500">${done}/${total} hosted samples loaded</span>`
+      ? `<br><span class="text-slate-500">${done}/${total} selected samples loaded</span>`
       : '';
     status.innerHTML = `${escapeHtml(message || '')}${countHtml}${errorHtml}`;
   }
@@ -377,12 +518,7 @@ function setSampleStatus(message, done = null, total = null){
 }
 
 function prioritizeSelectedSample(){
-  const sel = document.getElementById('samplePrioritySelect');
-  const key = sel?.value;
-  if (!key) return;
-  state.samplePriorityKey = key;
-  const entry = state.sampleEntries.find(e => sampleKey(e) === key);
-  if (entry) setSampleStatus(`Queued ${sampleLabel(entry)} to load next.`, state.sampleLoadedKeys.size, state.sampleEntries.length + state.sampleLoadedKeys.size);
+  openSamplePicker();
 }
 
 async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
@@ -454,49 +590,22 @@ async function loadSampleAnalyses(){
   state.sampleEntries = entries.slice();
   state.sampleLoadedKeys = new Set();
   state.sampleErrors = [];
-  state.sampleLoading = true;
-  const total = entries.length;
-  let added = 0;
-  let loadedFiles = 0;
-
-  setSampleStatus(total ? `Found ${total} hosted samples. Loading in background...` : 'No hosted samples found.', 0, total);
-  await nextPaint();
-
-  while (state.sampleEntries.length) {
-    const entry = chooseNextSampleEntry();
-    if (!entry) break;
-    const key = sampleKey(entry);
-    if (state.sampleLoadedKeys.has(key)) continue;
-    const label = sampleLabel(entry);
-
-    try {
-      setSampleStatus(`Loading ${label}...`, loadedFiles, total);
-      const result = await loadZipAnalysisFromUrl(entry, phase => setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total));
-      state.sampleLoadedKeys.add(key);
-      loadedFiles += 1;
-      added += result.added;
-      showNewDataset(result.lastItem);
-      setSampleStatus(`Loaded ${label}.`, loadedFiles, total);
-    } catch (err) {
-      state.sampleLoadedKeys.add(key);
-      loadedFiles += 1;
-      const msg = `${label}: ${err.message || err}`;
-      state.sampleErrors.push(msg);
-      console.warn(`Could not load ${SAMPLE_SET_NAME} file:`, entry.url, err);
-      setSampleStatus(`Skipped ${label}; continuing...`, loadedFiles, total);
-    }
-    await nextPaint();
-  }
-
   state.sampleLoading = false;
+  state.samplePickerPreselected = false;
+
   updateFileSummary();
   rebuildSelect();
-  setSampleStatus(
-    added ? `Done. Loaded ${added} hosted analysis file(s).` : 'Done. No hosted analysis files loaded; built-in Mackinac is available.',
-    loadedFiles,
-    total
-  );
-  return added;
+  populateSamplePrioritySelect();
+
+  if (!entries.length) {
+    setSampleStatus('No hosted samples found. Built-in Mackinac Island is available.', 0, 0);
+    return 0;
+  }
+
+  setSampleStatus(`Mackinac Island is loaded. ${entries.length} hosted sample(s) are available; choose up to 2 more when needed.`, null, null);
+  await nextPaint();
+  openSamplePicker();
+  return 0;
 }
 
 function base64ToBytes(b64){
@@ -966,10 +1075,7 @@ function drawOverlays(data, m){
   document.getElementById('legend').innerHTML = keys.join('');
 }
 function cityPointKey(){
-  if (state.mode !== 'city' || state.pointsView === 'hide') return '';
-  if (state.pointsView === 'score') {
-    return keyBlock('City Score Points', [['Low score','#ef4444'], ['Mid score','#d9f99d'], ['High score','#16a34a'], ['Data limit border','#a855f7']]);
-  }
+  if (state.mode !== 'city' || state.pointsView !== 'rank') return '';
   if (state.cityAgg === 'best') {
     return keyBlock('City Points', [['Included best area','#22c55e'], ['Excluded high status','#3b82f6'], ['Excluded / low status','#f97316']]);
   }
