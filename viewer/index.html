@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta</title>
+  <title>BFI Viewer Beta Samples</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -46,24 +46,31 @@
 </head>
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
-    <header class="flex flex-wrap items-center justify-between gap-3 shrink-0">
-      <div>
-        <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta</h1>
-      </div>
-      <div class="flex flex-wrap gap-2 items-center">
-        <button class="btn" onclick="document.getElementById('fileInput').click()">Upload analysis files / zip</button>
-        <input id="fileInput" type="file" class="hidden" multiple accept=".bfiana,.json,.zip" onchange="handleFiles(this.files)" />
-        <select id="datasetSelect" class="bg-slate-900 border border-slate-600 rounded-lg text-sm px-3 py-2 text-white min-w-64" onchange="selectDataset(this.value)"></select>
-        <div class="flex rounded-full bg-slate-900 border border-slate-700 p-1">
-          <button id="modeAddress" class="btn active rounded-full" onclick="setMode('address')">Address</button>
-          <button id="modeCity" class="btn rounded-full" onclick="setMode('city')">City</button>
-        </div>
-      </div>
+    <header class="shrink-0">
+      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta Samples</h1>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
       <aside class="w-[330px] shrink-0 flex flex-col gap-4 min-h-0">
         <section class="panel p-4 space-y-4 overflow-y-auto">
+          <div>
+            <div class="label mb-2">Analyses</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button class="btn w-full" onclick="document.getElementById('fileInput').click()">Upload analysis</button>
+              <button id="openSamplePickerBtn" class="btn w-full" onclick="openSamplePicker()">View additional samples</button>
+            </div>
+            <input id="fileInput" type="file" class="hidden" multiple accept=".bfiana,.json,.zip" onchange="handleFiles(this.files)" />
+            <select id="datasetSelect" class="hidden" onchange="selectDataset(this.value)"></select>
+            <div id="loadedDatasetButtons" class="mt-3 space-y-2"></div>
+            <div id="sampleStatus" class="hidden"></div>
+            <div class="hidden"><div id="sampleProgressBar" style="width:0%"></div></div>
+            <div id="fileSummary" class="hidden"></div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-700">
+            <div class="label mb-2">Settings</div>
+          </div>
+
           <div id="cityControls" class="hidden space-y-4">
             <div>
               <div class="label mb-2">City aggregation</div>
@@ -92,8 +99,8 @@
               </div>
             </div>
             <div>
-              <div class="flex justify-between items-end mb-2"><div class="label">Danger tolerance</div><div id="tolLabel" class="text-sm text-blue-400 font-black">50</div></div>
-              <input id="tolSlider" type="range" min="25" max="100" step="25" value="50" class="w-full" oninput="setTolerance(this.value)" />
+              <div class="flex justify-between items-end mb-2"><div class="label">Danger tolerance</div><div id="tolLabel" class="text-sm text-blue-400 font-black">25 (default)</div></div>
+              <input id="tolSlider" type="range" min="25" max="100" step="25" value="25" class="w-full" oninput="setTolerance(this.value)" />
               
             </div>
           </div>
@@ -118,21 +125,6 @@
             <div id="legend" class="text-[10px] text-slate-500 mt-2 min-h-4"></div>
           </div>
 
-          <div class="pt-4 border-t border-slate-700">
-            <div class="label mb-2 text-blue-300">Sample loading</div>
-            <div id="sampleStatus" class="text-xs text-slate-400 leading-relaxed">Starting viewer...</div>
-            <div class="mt-2 h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden">
-              <div id="sampleProgressBar" class="h-full bg-blue-600" style="width:0%"></div>
-            </div>
-            <div class="mt-2 flex gap-2">
-              <button id="openSamplePickerBtn" class="btn w-full" onclick="openSamplePicker()">Choose additional samples</button>
-            </div>
-          </div>
-
-          <div class="pt-4 border-t border-slate-700">
-            <div class="label mb-2">Loaded analyses</div>
-            <div id="fileSummary" class="text-xs text-slate-400 leading-relaxed">No analyses loaded yet.</div>
-          </div>
         </section>
       </aside>
 
@@ -188,7 +180,7 @@
 
 <script>
 const state = {
-  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'score', tolerance:'50',
+  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'score', tolerance:'25',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
   sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false
 };
@@ -202,8 +194,8 @@ const FALLBACK_EMBEDDED_ANALYSES = [
   }
 ];
 
-const SAMPLE_SET_NAME = 'BFI Viewer Beta';
-const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta.json';
+const SAMPLE_SET_NAME = 'BFI Viewer Beta Samples';
+const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
 const SAMPLE_FILE_PATHS = [
   'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
   'sample-files/Helsinki_Finland.viewer-pruned.zip',
@@ -324,7 +316,7 @@ function addSampleEntries(target, entries){
 async function resolveSampleFiles(){
   const byKey = new Map();
 
-  // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta.json.
+  // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta Samples.json.
   // It can be either ["sample-files/file.zip", ...] or { "files": [ ... ] }.
   try {
     const manifestResponse = await fetch(encodeURI(SAMPLE_MANIFEST_PATH), { cache: 'no-store' });
@@ -376,7 +368,7 @@ function populateSamplePrioritySelect(){
   const btn = document.getElementById('openSamplePickerBtn');
   if (btn) {
     const pendingCount = pendingSampleEntries().length;
-    btn.textContent = pendingCount ? `Choose additional samples (${pendingCount} available)` : 'All hosted samples loaded';
+    btn.textContent = pendingCount ? 'View additional samples' : 'All samples loaded';
     btn.disabled = state.sampleLoading || !pendingCount;
   }
   renderSamplePickerList();
@@ -720,10 +712,12 @@ async function ingestText(text, name, options = {}){
 
 function rebuildSelect(){
   const sel = document.getElementById('datasetSelect');
+  if (!sel) { updateLoadedDatasetButtons(); return; }
   sel.innerHTML = '';
   const filtered = state.datasets.filter(d => d.kind === state.mode);
   if (!filtered.length) {
     sel.innerHTML = `<option value="">No ${state.mode} files loaded</option>`;
+    updateLoadedDatasetButtons();
     return;
   }
   filtered.forEach(d => {
@@ -731,9 +725,46 @@ function rebuildSelect(){
   });
   if (!filtered.some(d => d.id === state.currentId)) state.currentId = filtered[0].id;
   sel.value = state.currentId;
+  updateLoadedDatasetButtons();
+}
+
+function updateLoadedDatasetButtons(){
+  const box = document.getElementById('loadedDatasetButtons');
+  if (!box) return;
+  box.innerHTML = '';
+  if (!state.datasets.length) {
+    const empty = document.createElement('div');
+    empty.className = 'text-xs text-slate-500 leading-relaxed';
+    empty.textContent = 'No analyses loaded yet.';
+    box.appendChild(empty);
+    return;
+  }
+  state.datasets.forEach(d => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `btn w-full text-left ${d.id === state.currentId ? 'active' : ''}`;
+    btn.onclick = () => selectLoadedDataset(d.id);
+    const kind = d.kind === 'city' ? 'City' : 'Address';
+    btn.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-400">${kind}</span><span class="text-[10px] text-slate-500">${d.sample ? 'sample' : d.embedded ? 'built-in' : 'upload'}</span></div><div class="mt-1 text-white font-black truncate">${escapeHtml(d.label)}</div>`;
+    box.appendChild(btn);
+  });
+}
+
+function selectLoadedDataset(id){
+  const item = state.datasets.find(d => d.id === id);
+  if (!item) return;
+  state.mode = item.kind;
+  state.currentId = item.id;
+  state.autoFitPending = true;
+  syncModeButtons();
+  rebuildSelect();
+  render();
 }
 
 function updateFileSummary(){
+  updateLoadedDatasetButtons();
+  const fileSummary = document.getElementById('fileSummary');
+  if (!fileSummary) return;
   const cityItems = state.datasets.filter(d=>d.kind==='city');
   const addrItems = state.datasets.filter(d=>d.kind==='address');
   const sampleCount = state.datasets.filter(d=>d.sample).length;
@@ -741,7 +772,7 @@ function updateFileSummary(){
   const uploaded = state.datasets.length - sampleCount - embedded;
 
   if (!state.datasets.length) {
-    document.getElementById('fileSummary').innerHTML = 'No analyses loaded yet.';
+    fileSummary.innerHTML = 'No analyses loaded yet.';
     return;
   }
 
@@ -757,23 +788,25 @@ function updateFileSummary(){
   if (shownCities) parts.push(`<span class="text-slate-500">City analyses:</span><br>${shownCities}`);
   if (shownAddr) parts.push(`<span class="text-slate-500">Address analyses:</span><br>${shownAddr}`);
 
-  document.getElementById('fileSummary').innerHTML = parts.join('<br><br>');
+  fileSummary.innerHTML = parts.join('<br><br>');
 }
 function escapeHtml(s){ return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 function syncModeButtons(){
-  document.getElementById('modeAddress').classList.toggle('active', state.mode==='address');
-  document.getElementById('modeCity').classList.toggle('active', state.mode==='city');
+  const modeAddress = document.getElementById('modeAddress');
+  const modeCity = document.getElementById('modeCity');
+  if (modeAddress) modeAddress.classList.toggle('active', state.mode==='address');
+  if (modeCity) modeCity.classList.toggle('active', state.mode==='city');
   document.getElementById('addressControls').classList.toggle('hidden', state.mode!=='address');
   document.getElementById('cityControls').classList.toggle('hidden', state.mode!=='city');
 }
-function selectDataset(id){ state.currentId = id; state.autoFitPending = true; render(); }
+function selectDataset(id){ state.currentId = id; state.autoFitPending = true; updateLoadedDatasetButtons(); render(); }
 function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
 function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
 function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
-function setTolerance(v){ state.tolerance=String(v); document.getElementById('tolLabel').textContent=v; render(); }
+function setTolerance(v){ state.tolerance=String(v); document.getElementById('tolLabel').textContent=String(v)==='25' ? '25 (default)' : v; render(); }
 function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
   if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
