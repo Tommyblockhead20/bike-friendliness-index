@@ -168,8 +168,8 @@
     <div class="panel w-full max-w-xl p-5 shadow-2xl border-blue-500/50">
       <div class="flex items-start justify-between gap-4 mb-3">
         <div>
-          <h2 class="text-xl font-black text-white">Load more samples</h2>
-          <p class="text-xs text-slate-400 mt-1">Mackinac Island starts loaded. Pick up to two additional hosted analyses to keep memory sane.</p>
+          <h2 class="text-xl font-black text-white">Load more samples?</h2>
+          <p class="text-xs text-slate-400 mt-1">1 example of each mode is preloaded. You may select 1 or 2 more cities to load as well (max 2 due to memory constraints).</p>
         </div>
         <button class="btn" onclick="closeSamplePicker()">Close</button>
       </div>
@@ -583,6 +583,10 @@ function showNewDataset(item){
   render();
 }
 
+function columbusAddressIsLoaded(){
+  return state.datasets.some(d => d.kind === 'address' && /columbus|39\.98404_-83/i.test(`${d.label || ''} ${d.name || ''}`));
+}
+
 async function loadSampleAnalyses(){
   if (!window.JSZip) { updateFileSummary(); setSampleStatus('JSZip is unavailable, so hosted samples cannot load.', 0, 0); return 0; }
 
@@ -591,7 +595,7 @@ async function loadSampleAnalyses(){
   state.sampleLoadedKeys = new Set();
   state.sampleErrors = [];
   state.sampleLoading = false;
-  state.samplePickerPreselected = false;
+  state.samplePickerPreselected = true;
 
   updateFileSummary();
   rebuildSelect();
@@ -602,7 +606,20 @@ async function loadSampleAnalyses(){
     return 0;
   }
 
-  setSampleStatus(`Mackinac Island is loaded. ${entries.length} hosted sample(s) are available; choose up to 2 more when needed.`, null, null);
+  const columbusEntry = entries.find(isColumbusSample);
+  if (columbusEntry && !state.sampleLoadedKeys.has(sampleKey(columbusEntry))) {
+    setSampleStatus('Loading Columbus, OH Address Analysis...', 0, 1);
+    await nextPaint();
+    await loadSelectedSampleEntries([sampleKey(columbusEntry)]);
+  } else if (!columbusAddressIsLoaded()) {
+    state.sampleErrors.push('Columbus, OH Address Analysis was not found in hosted samples.');
+  }
+
+  const pendingCount = pendingSampleEntries().length;
+  const preloaded = columbusAddressIsLoaded()
+    ? 'Mackinac Island and Columbus, OH Address Analysis are preloaded.'
+    : 'Mackinac Island is preloaded. Columbus, OH Address Analysis could not be loaded automatically.';
+  setSampleStatus(`${preloaded} ${pendingCount} additional hosted city sample(s) are available; choose up to 2 more when needed.`, null, null);
   await nextPaint();
   openSamplePicker();
   return 0;
