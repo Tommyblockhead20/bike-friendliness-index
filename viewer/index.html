@@ -55,13 +55,11 @@
         <section class="panel p-4 space-y-4 overflow-y-auto">
           <div>
             <div class="label mb-2">Analyses</div>
-            <div class="grid grid-cols-2 gap-2">
-              <button class="btn w-full" onclick="document.getElementById('fileInput').click()">Upload analysis</button>
-              <button id="openSamplePickerBtn" class="btn w-full" onclick="openSamplePicker()">View additional samples</button>
-            </div>
+            <button class="btn w-full" onclick="document.getElementById('fileInput').click()">Upload analysis</button>
             <input id="fileInput" type="file" class="hidden" multiple accept=".bfiana,.json,.zip" onchange="handleFiles(this.files)" />
             <select id="datasetSelect" class="hidden" onchange="selectDataset(this.value)"></select>
             <div id="loadedDatasetButtons" class="mt-3 space-y-2"></div>
+            <button id="openSamplePickerBtn" class="btn w-full mt-3" onclick="openSamplePicker()">View additional samples</button>
             <div id="sampleStatus" class="hidden"></div>
             <div class="hidden"><div id="sampleProgressBar" style="width:0%"></div></div>
             <div id="fileSummary" class="hidden"></div>
@@ -117,10 +115,10 @@
           <div class="pt-4 border-t border-slate-700">
             <div class="label mb-2 text-red-300">Overlays</div>
             <div class="space-y-2">
-              <button id="ov-bad" class="btn warn w-full" onclick="toggleOverlay('bad')">⚠️ Higher Risk Intersections</button>
-              <button id="ov-stress" class="btn orange w-full" onclick="toggleOverlay('stress')">🌈 Stress Heatmap</button>
               <button id="ov-type" class="btn w-full" onclick="toggleOverlay('type')">🗺️ Network Type</button>
+              <button id="ov-stress" class="btn orange w-full" onclick="toggleOverlay('stress')">🌈 Stress Heatmap</button>
               <button id="ov-dest" class="btn purple w-full" onclick="toggleOverlay('dest')">📍 Destinations</button>
+              <button id="ov-bad" class="btn warn w-full" onclick="toggleOverlay('bad')">⚠️ Higher Risk Intersections</button>
             </div>
             <div id="legend" class="text-[10px] text-slate-500 mt-2 min-h-4"></div>
           </div>
@@ -161,7 +159,7 @@
       <div class="flex items-start justify-between gap-4 mb-3">
         <div>
           <h2 class="text-xl font-black text-white">Load more samples?</h2>
-          <p class="text-xs text-slate-400 mt-1">1 example of each mode is preloaded. You may select 1 or 2 more cities to load as well (max 2 due to memory constraints).</p>
+          <p class="text-xs text-slate-400 mt-1">1 example of each mode is preloaded. You may select 1 or 2 more cities to load as well (max 2 due to memory constraints). To view a different set of samples later, reload the page; that is the cleanest way to clear the large sample files from memory.</p>
         </div>
         <button class="btn" onclick="closeSamplePicker()">Close</button>
       </div>
@@ -182,7 +180,8 @@
 const state = {
   mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'score', tolerance:'25',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
-  sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false
+  sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false,
+  sampleLoadingItems:{}, additionalSamplesLocked:false
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -215,17 +214,17 @@ async function initMap(){
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => { clearTimeout(zoomRenderTimer); zoomRenderTimer = setTimeout(() => render(), 60); });
 
-  setSampleStatus('Loading built-in Mackinac Island sample...', 0, 1);
+  setSampleStatus('Loading Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
   if (!state.datasets.some(d => /mackinac/i.test(d.label || d.name || ''))) {
     await loadEmbeddedAnalyses(FALLBACK_EMBEDDED_ANALYSES);
   }
 
-  // Load hosted samples in the background so Mackinac appears immediately and the page does not feel dead.
+  // Load hosted sample metadata in the background so Mackinac appears immediately and the page does not feel dead.
   loadSampleAnalyses().catch(err => {
     console.warn('Sample loading failed:', err);
     state.sampleErrors.push(`Sample loader failed: ${err.message || err}`);
-    setSampleStatus('Sample loading failed. Built-in Mackinac is still available.', 0, 0);
+    setSampleStatus('Sample loading failed. Mackinac Island is still available.', 0, 0);
   });
 }
 
@@ -368,12 +367,13 @@ function populateSamplePrioritySelect(){
   const btn = document.getElementById('openSamplePickerBtn');
   if (btn) {
     const pendingCount = pendingSampleEntries().length;
-    btn.textContent = pendingCount ? 'View additional samples' : 'All samples loaded';
-    btn.disabled = state.sampleLoading || !pendingCount;
+    const shouldHide = state.additionalSamplesLocked || (!pendingCount && !state.sampleLoading);
+    btn.classList.toggle('hidden', shouldHide);
+    btn.textContent = state.sampleLoading ? 'Loading samples...' : 'View additional samples';
+    btn.disabled = state.sampleLoading || !pendingCount || state.additionalSamplesLocked;
   }
   renderSamplePickerList();
 }
-
 function openSamplePicker(){
   renderSamplePickerList();
   const modal = document.getElementById('samplePickerModal');
@@ -414,6 +414,11 @@ function onSampleCheckboxChange(box){
 function renderSamplePickerList(){
   const list = document.getElementById('samplePickerList');
   if (!list) return;
+  if (state.additionalSamplesLocked) {
+    list.innerHTML = `<div class="text-slate-400 p-2">Extra samples are already loaded. To view a different set, reload the page so the browser fully clears the large sample files from memory.</div>`;
+    updateSamplePickerControls();
+    return;
+  }
   const pending = pendingSampleEntries();
   if (!pending.length) {
     list.innerHTML = `<div class="text-slate-400 p-2">No hosted samples left to load.</div>`;
@@ -436,12 +441,33 @@ function renderSamplePickerList(){
   if (shouldPreselectColumbus) state.samplePickerPreselected = true;
   updateSamplePickerControls();
 }
-
 async function loadSelectedSamplesFromPicker(){
   const keys = selectedSampleKeys();
   if (!keys.length || state.sampleLoading) return;
-  await loadSelectedSampleEntries(keys.slice(0, 2));
+  const added = await loadSelectedSampleEntries(keys.slice(0, 2));
+  if (added > 0) state.additionalSamplesLocked = true;
+  populateSamplePrioritySelect();
   closeSamplePicker();
+}
+
+function setLoadingSampleButton(key, label, phase = 'Queued', pct = 0){
+  if (!key) return;
+  state.sampleLoadingItems[key] = { label, phase, pct };
+  updateLoadedDatasetButtons();
+}
+
+function clearLoadingSampleButton(key){
+  if (!key) return;
+  delete state.sampleLoadingItems[key];
+  updateLoadedDatasetButtons();
+}
+
+function phaseProgress(phase){
+  const p = String(phase || '').toLowerCase();
+  if (p.includes('reading')) return 82;
+  if (p.includes('decompress') || p.includes('download')) return 55;
+  if (p.includes('fetch')) return 22;
+  return 12;
 }
 
 async function loadSelectedSampleEntries(keys){
@@ -450,6 +476,10 @@ async function loadSelectedSampleEntries(keys){
   if (!uniqueKeys.length) return 0;
 
   state.sampleLoading = true;
+  uniqueKeys.forEach(key => {
+    const entry = state.sampleEntries.find(e => sampleKey(e) === key);
+    if (entry) setLoadingSampleButton(key, sampleLabel(entry), 'Queued', 5);
+  });
   populateSamplePrioritySelect();
   let added = 0;
   let loadedFiles = 0;
@@ -460,19 +490,28 @@ async function loadSelectedSampleEntries(keys){
     if (!entry) continue;
     const label = sampleLabel(entry);
     try {
+      setLoadingSampleButton(key, label, 'Fetching zip', 20);
       setSampleStatus(`Loading ${label}...`, loadedFiles, total);
-      const result = await loadZipAnalysisFromUrl(entry, phase => setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total));
+      const result = await loadZipAnalysisFromUrl(entry, phase => {
+        setLoadingSampleButton(key, label, phase, phaseProgress(phase));
+        setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total);
+      });
+      setLoadingSampleButton(key, label, 'Loaded', 100);
       state.sampleLoadedKeys.add(key);
       loadedFiles += 1;
       added += result.added;
       showNewDataset(result.lastItem);
+      clearLoadingSampleButton(key);
       setSampleStatus(`Loaded ${label}.`, loadedFiles, total);
     } catch (err) {
+      setLoadingSampleButton(key, label, 'Failed', 100);
       state.sampleLoadedKeys.add(key);
       loadedFiles += 1;
       const msg = `${label}: ${err.message || err}`;
       state.sampleErrors.push(msg);
       console.warn(`Could not load ${SAMPLE_SET_NAME} file:`, entry.url, err);
+      await nextPaint();
+      clearLoadingSampleButton(key);
       setSampleStatus(`Skipped ${label}; continuing...`, loadedFiles, total);
     }
     await nextPaint();
@@ -594,7 +633,7 @@ async function loadSampleAnalyses(){
   populateSamplePrioritySelect();
 
   if (!entries.length) {
-    setSampleStatus('No hosted samples found. Built-in Mackinac Island is available.', 0, 0);
+    setSampleStatus('No hosted samples found. Mackinac Island sample is available.', 0, 0);
     return 0;
   }
 
@@ -613,7 +652,7 @@ async function loadSampleAnalyses(){
     : 'Mackinac Island is preloaded. Columbus, OH Address Analysis could not be loaded automatically.';
   setSampleStatus(`${preloaded} ${pendingCount} additional hosted city sample(s) are available; choose up to 2 more when needed.`, null, null);
   await nextPaint();
-  openSamplePicker();
+  populateSamplePrioritySelect();
   return 0;
 }
 
@@ -632,7 +671,7 @@ async function loadEmbeddedAnalyses(list = EMBEDDED_ANALYSES){
       const zip = await JSZip.loadAsync(base64ToBytes(embedded.zipBase64));
       for (const name of Object.keys(zip.files)) {
         if (/\.(bfiana|json)$/i.test(name) && !zip.files[name].dir) {
-          const item = await ingestText(await zip.files[name].async('string'), embedded.name || name, { embedded:true, label:embedded.label });
+          const item = await ingestText(await zip.files[name].async('string'), embedded.name || name, { embedded:true, sample:true, label:embedded.label });
           if (item) { added += 1; lastItem = item; }
         }
       }
@@ -732,7 +771,7 @@ function updateLoadedDatasetButtons(){
   const box = document.getElementById('loadedDatasetButtons');
   if (!box) return;
   box.innerHTML = '';
-  if (!state.datasets.length) {
+  if (!state.datasets.length && !Object.keys(state.sampleLoadingItems || {}).length) {
     const empty = document.createElement('div');
     empty.className = 'text-xs text-slate-500 leading-relaxed';
     empty.textContent = 'No analyses loaded yet.';
@@ -745,11 +784,22 @@ function updateLoadedDatasetButtons(){
     btn.className = `btn w-full text-left ${d.id === state.currentId ? 'active' : ''}`;
     btn.onclick = () => selectLoadedDataset(d.id);
     const kind = d.kind === 'city' ? 'City' : 'Address';
-    btn.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-400">${kind}</span><span class="text-[10px] text-slate-500">${d.sample ? 'sample' : d.embedded ? 'built-in' : 'upload'}</span></div><div class="mt-1 text-white font-black truncate">${escapeHtml(d.label)}</div>`;
+    const source = d.sample || d.embedded ? 'sample' : 'upload';
+    btn.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-400">${kind}</span><span class="text-[10px] text-slate-500">${source}</span></div><div class="mt-1 text-white font-black truncate">${escapeHtml(d.label)}</div>`;
     box.appendChild(btn);
   });
+  Object.entries(state.sampleLoadingItems || {}).forEach(([key, item]) => {
+    const entry = state.sampleEntries.find(e => sampleKey(e) === key);
+    const kind = entry && isColumbusSample(entry) ? 'Address' : 'City';
+    const pct = Math.max(0, Math.min(100, Number(item.pct) || 0));
+    const loadingBtn = document.createElement('button');
+    loadingBtn.type = 'button';
+    loadingBtn.disabled = true;
+    loadingBtn.className = 'btn w-full text-left opacity-65 cursor-wait bg-slate-800 border-slate-700';
+    loadingBtn.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-500">${kind}</span><span class="text-[10px] text-slate-500">loading</span></div><div class="mt-1 text-slate-300 font-black truncate">${escapeHtml(item.label)}</div><div class="mt-2 h-1.5 rounded-full bg-slate-950 overflow-hidden"><div class="h-full bg-slate-500" style="width:${pct}%"></div></div><div class="mt-1 text-[10px] text-slate-500 truncate">${escapeHtml(item.phase || 'Loading')}</div>`;
+    box.appendChild(loadingBtn);
+  });
 }
-
 function selectLoadedDataset(id){
   const item = state.datasets.find(d => d.id === id);
   if (!item) return;
@@ -778,13 +828,13 @@ function updateFileSummary(){
 
   const sourceTag = d => {
     if (d.sample) return ` <span class="text-slate-500">(${escapeHtml(d.sampleGroup || SAMPLE_SET_NAME)})</span>`;
-    if (d.embedded) return ' <span class="text-slate-500">(built-in)</span>';
+    if (d.embedded) return ' <span class="text-slate-500">(sample)</span>';
     return '';
   };
   const shownCities = cityItems.slice(0,6).map(d=>`• ${escapeHtml(d.label)}${sourceTag(d)}`).join('<br>');
   const shownAddr = addrItems.slice(0,6).map(d=>`• ${escapeHtml(d.label)}${sourceTag(d)}`).join('<br>');
 
-  const parts = [`${state.datasets.length} analysis file(s) loaded: ${sampleCount} ${SAMPLE_SET_NAME}, ${embedded} built-in, ${uploaded} uploaded.`];
+  const parts = [`${state.datasets.length} analysis file(s) loaded: ${sampleCount + embedded} sample(s), ${uploaded} uploaded.`];
   if (shownCities) parts.push(`<span class="text-slate-500">City analyses:</span><br>${shownCities}`);
   if (shownAddr) parts.push(`<span class="text-slate-500">Address analyses:</span><br>${shownAddr}`);
 
@@ -811,7 +861,7 @@ function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
   if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
   if (name === 'type' && state.overlays.type) state.overlays.stress = false;
-  ['bad','stress','type','dest'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
+  ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
   render();
 }
 
@@ -1091,6 +1141,27 @@ function drawOverlays(data, m){
   const rankNote = cityRankDisclaimer(data);
   if (rankNote) keys.push(rankNote);
 
+  if (state.overlays.type) {
+    const c = data.cityLines?.classification;
+    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type);
+    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type);
+    keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
+  }
+  if (state.overlays.stress) {
+    const cityStress = data.cityLines?.stress;
+    const addrStress = m?.lines?.stress;
+    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress);
+    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress);
+    keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
+  }
+  if (state.overlays.dest) {
+    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
+    pois.forEach(p => {
+      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+      L.circleMarker([p.lat,p.lon], { radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 }).bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`).addTo(layers.dest);
+    });
+    keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
+  }
   if (state.overlays.bad) {
     const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
     pts.forEach(p => {
@@ -1100,27 +1171,6 @@ function drawOverlays(data, m){
         .addTo(layers.bad);
     });
     keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
-  }
-  if (state.overlays.stress) {
-    const cityStress = data.cityLines?.stress;
-    const addrStress = m?.lines?.stress;
-    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress);
-    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress);
-    keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
-  }
-  if (state.overlays.type) {
-    const c = data.cityLines?.classification;
-    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type);
-    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type);
-    keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
-  }
-  if (state.overlays.dest) {
-    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-    pois.forEach(p => {
-      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
-      L.circleMarker([p.lat,p.lon], { radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 }).bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`).addTo(layers.dest);
-    });
-    keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
   }
   document.getElementById('legend').innerHTML = keys.join('');
 }
