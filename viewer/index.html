@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Samples</title>
+  <title>BFI Viewer Beta</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -119,6 +119,20 @@
           </div>
 
           <div class="pt-4 border-t border-slate-700">
+            <div class="label mb-2 text-blue-300">Sample loading</div>
+            <div id="sampleStatus" class="text-xs text-slate-400 leading-relaxed">Starting viewer...</div>
+            <div class="mt-2 h-2 rounded-full bg-slate-900 border border-slate-700 overflow-hidden">
+              <div id="sampleProgressBar" class="h-full bg-blue-600" style="width:0%"></div>
+            </div>
+            <div class="mt-2 flex gap-2">
+              <select id="samplePrioritySelect" class="bg-slate-900 border border-slate-600 rounded-lg text-xs px-2 py-2 text-white min-w-0 grow">
+                <option value="">Finding samples...</option>
+              </select>
+              <button class="btn shrink-0" onclick="prioritizeSelectedSample()">Load next</button>
+            </div>
+          </div>
+
+          <div class="pt-4 border-t border-slate-700">
             <div class="label mb-2">Loaded analyses</div>
             <div id="fileSummary" class="text-xs text-slate-400 leading-relaxed">No analyses loaded yet.</div>
           </div>
@@ -156,7 +170,8 @@
 <script>
 const state = {
   mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'rank', tolerance:'50',
-  datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false}
+  datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
+  sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[]
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -188,9 +203,19 @@ async function initMap(){
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => { clearTimeout(zoomRenderTimer); zoomRenderTimer = setTimeout(() => render(), 60); });
+
+  setSampleStatus('Loading built-in Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
-  const sampleCount = await loadSampleAnalyses();
-  if (!sampleCount) await loadEmbeddedAnalyses(FALLBACK_EMBEDDED_ANALYSES);
+  if (!state.datasets.some(d => /mackinac/i.test(d.label || d.name || ''))) {
+    await loadEmbeddedAnalyses(FALLBACK_EMBEDDED_ANALYSES);
+  }
+
+  // Load hosted samples in the background so Mackinac appears immediately and the page does not feel dead.
+  loadSampleAnalyses().catch(err => {
+    console.warn('Sample loading failed:', err);
+    state.sampleErrors.push(`Sample loader failed: ${err.message || err}`);
+    setSampleStatus('Sample loading failed. Built-in Mackinac is still available.', 0, 0);
+  });
 }
 
 function resetLayers(){ Object.values(layers).forEach(l => l.clearLayers()); }
@@ -251,7 +276,28 @@ function prettifySampleLabel(name){
     .trim() || name;
 }
 
+function sampleKey(entry){
+  return String(entry?.name || entry?.url || '').toLowerCase();
+}
+
+function sampleLabel(entry){
+  return entry?.label || prettifySampleLabel(entry?.name || entry?.url || 'sample');
+}
+
+function addSampleEntries(target, entries){
+  for (const raw of entries || []) {
+    const entry = normalizeSampleEntry(raw);
+    if (!entry) continue;
+    const key = sampleKey(entry);
+    if (!key) continue;
+    if (!target.has(key)) target.set(key, entry);
+    else if (entry.label && !target.get(key).label) target.get(key).label = entry.label;
+  }
+}
+
 async function resolveSampleFiles(){
+  const byKey = new Map();
+
   // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta Samples.json.
   // It can be either ["sample-files/file.zip", ...] or { "files": [ ... ] }.
   try {
@@ -259,45 +305,102 @@ async function resolveSampleFiles(){
     if (manifestResponse.ok) {
       const manifest = await manifestResponse.json();
       const entries = Array.isArray(manifest) ? manifest : (manifest.files || []);
-      const normalized = entries.map(normalizeSampleEntry).filter(Boolean);
-      if (normalized.length) return normalized;
+      addSampleEntries(byKey, entries);
     }
   } catch (err) {
     console.info('No sample manifest found; trying GitHub directory discovery.', err);
   }
 
-  // Fallback: auto-discover every .zip in viewer/sample-files from the public GitHub repo.
-  // This avoids hardcoding filenames, which is useful for long coordinate-based names.
+  // Also auto-discover every .zip in viewer/sample-files from the public GitHub repo.
+  // Do not return early here: a stale manifest can otherwise hide new samples.
   try {
     const apiResponse = await fetch(GITHUB_SAMPLE_DIRECTORY_API, { cache: 'no-store' });
     if (apiResponse.ok) {
       const listing = await apiResponse.json();
-      const normalized = listing
+      addSampleEntries(byKey, listing
         .filter(item => item.type === 'file' && /\.zip$/i.test(item.name))
         .map(item => ({
           name: item.name,
           url: `sample-files/${encodeURIComponent(item.name)}`
-        }));
-      if (normalized.length) return normalized;
+        })));
     }
   } catch (err) {
     console.warn('Could not discover sample files from GitHub:', err);
   }
 
-  // Final fallback: known files from the screenshot. Exact spelling/capitalization matters.
-  return SAMPLE_FILE_PATHS.map(normalizeSampleEntry).filter(Boolean);
+  // Final safety net: known files from the sample-files folder. Exact spelling/capitalization matters.
+  addSampleEntries(byKey, SAMPLE_FILE_PATHS);
+  return [...byKey.values()];
 }
 
-async function loadZipAnalysisFromUrl(entry){
-  const response = await fetch(encodeURI(entry.url));
+function nextPaint(){
+  return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+
+function populateSamplePrioritySelect(){
+  const sel = document.getElementById('samplePrioritySelect');
+  if (!sel) return;
+  const pending = state.sampleEntries.filter(entry => !state.sampleLoadedKeys.has(sampleKey(entry)));
+  sel.innerHTML = '';
+  if (!pending.length) {
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = state.sampleLoading ? 'Finishing current file...' : 'All hosted samples loaded';
+    sel.appendChild(option);
+    return;
+  }
+  pending.forEach(entry => {
+    const option = document.createElement('option');
+    option.value = sampleKey(entry);
+    option.textContent = sampleLabel(entry);
+    sel.appendChild(option);
+  });
+}
+
+function setSampleStatus(message, done = null, total = null){
+  const status = document.getElementById('sampleStatus');
+  const bar = document.getElementById('sampleProgressBar');
+  if (status) {
+    const errorHtml = state.sampleErrors.length
+      ? `<br><span class="text-red-300">${state.sampleErrors.length} failed:</span> ${state.sampleErrors.slice(-2).map(escapeHtml).join('<br>')}`
+      : '';
+    const countHtml = Number.isFinite(done) && Number.isFinite(total) && total > 0
+      ? `<br><span class="text-slate-500">${done}/${total} hosted samples loaded</span>`
+      : '';
+    status.innerHTML = `${escapeHtml(message || '')}${countHtml}${errorHtml}`;
+  }
+  if (bar) {
+    const pct = Number.isFinite(done) && Number.isFinite(total) && total > 0 ? Math.round(100 * done / total) : 0;
+    bar.style.width = `${Math.max(0, Math.min(100, pct))}%`;
+  }
+  populateSamplePrioritySelect();
+}
+
+function prioritizeSelectedSample(){
+  const sel = document.getElementById('samplePrioritySelect');
+  const key = sel?.value;
+  if (!key) return;
+  state.samplePriorityKey = key;
+  const entry = state.sampleEntries.find(e => sampleKey(e) === key);
+  if (entry) setSampleStatus(`Queued ${sampleLabel(entry)} to load next.`, state.sampleLoadedKeys.size, state.sampleEntries.length + state.sampleLoadedKeys.size);
+}
+
+async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
+  onPhase('fetching zip');
+  await nextPaint();
+  const response = await fetch(encodeURI(entry.url), { cache: 'no-store' });
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
 
+  onPhase('downloading/decompressing zip');
+  await nextPaint();
   const zip = await JSZip.loadAsync(await response.blob());
   let added = 0;
   let lastItem = null;
 
   for (const name of Object.keys(zip.files)) {
     if (/\.(bfiana|json)$/i.test(name) && !zip.files[name].dir) {
+      onPhase(`reading ${name.split('/').pop()}`);
+      await nextPaint();
       const item = await ingestText(
         await zip.files[name].async('string'),
         name,
@@ -309,7 +412,7 @@ async function loadZipAnalysisFromUrl(entry){
         }
       );
       if (item) {
-        if (!entry.label) item.label = item.label || prettifySampleLabel(entry.name || name);
+        if (!entry.label) item.label = item.label || sampleLabel(entry);
         added += 1;
         lastItem = item;
       }
@@ -319,32 +422,80 @@ async function loadZipAnalysisFromUrl(entry){
   return { added, lastItem };
 }
 
+function chooseNextSampleEntry(){
+  let idx = -1;
+  if (state.samplePriorityKey) {
+    idx = state.sampleEntries.findIndex(entry => sampleKey(entry) === state.samplePriorityKey);
+    state.samplePriorityKey = null;
+  }
+  if (idx < 0) idx = 0;
+  const [entry] = state.sampleEntries.splice(idx, 1);
+  return entry || null;
+}
+
+function showNewDataset(item){
+  if (!item) return;
+  const activeStillExists = state.datasets.some(d => d.id === state.currentId && d.kind === state.mode);
+  if (!activeStillExists) {
+    state.mode = item.kind;
+    state.currentId = item.id;
+    state.autoFitPending = true;
+  }
+  updateFileSummary();
+  syncModeButtons();
+  rebuildSelect();
+  render();
+}
+
 async function loadSampleAnalyses(){
-  if (!window.JSZip) { updateFileSummary(); return 0; }
+  if (!window.JSZip) { updateFileSummary(); setSampleStatus('JSZip is unavailable, so hosted samples cannot load.', 0, 0); return 0; }
 
   const entries = await resolveSampleFiles();
+  state.sampleEntries = entries.slice();
+  state.sampleLoadedKeys = new Set();
+  state.sampleErrors = [];
+  state.sampleLoading = true;
+  const total = entries.length;
   let added = 0;
-  let lastItem = null;
+  let loadedFiles = 0;
 
-  for (const entry of entries) {
+  setSampleStatus(total ? `Found ${total} hosted samples. Loading in background...` : 'No hosted samples found.', 0, total);
+  await nextPaint();
+
+  while (state.sampleEntries.length) {
+    const entry = chooseNextSampleEntry();
+    if (!entry) break;
+    const key = sampleKey(entry);
+    if (state.sampleLoadedKeys.has(key)) continue;
+    const label = sampleLabel(entry);
+
     try {
-      const result = await loadZipAnalysisFromUrl(entry);
+      setSampleStatus(`Loading ${label}...`, loadedFiles, total);
+      const result = await loadZipAnalysisFromUrl(entry, phase => setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total));
+      state.sampleLoadedKeys.add(key);
+      loadedFiles += 1;
       added += result.added;
-      if (result.lastItem) lastItem = result.lastItem;
+      showNewDataset(result.lastItem);
+      setSampleStatus(`Loaded ${label}.`, loadedFiles, total);
     } catch (err) {
+      state.sampleLoadedKeys.add(key);
+      loadedFiles += 1;
+      const msg = `${label}: ${err.message || err}`;
+      state.sampleErrors.push(msg);
       console.warn(`Could not load ${SAMPLE_SET_NAME} file:`, entry.url, err);
+      setSampleStatus(`Skipped ${label}; continuing...`, loadedFiles, total);
     }
+    await nextPaint();
   }
 
+  state.sampleLoading = false;
   updateFileSummary();
-  if (added) {
-    state.mode = lastItem.kind;
-    state.currentId = lastItem.id;
-    state.autoFitPending = true;
-    syncModeButtons();
-    rebuildSelect();
-    render();
-  }
+  rebuildSelect();
+  setSampleStatus(
+    added ? `Done. Loaded ${added} hosted analysis file(s).` : 'Done. No hosted analysis files loaded; built-in Mackinac is available.',
+    loadedFiles,
+    total
+  );
   return added;
 }
 
