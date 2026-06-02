@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Samples</title>
+  <title>BFI Viewer Beta</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -47,7 +47,7 @@
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
     <header class="shrink-0">
-      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta Samples</h1>
+      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta</h1>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
@@ -154,6 +154,17 @@
     </main>
   </div>
 
+  <div id="mobileWarningModal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/85 z-[10000] p-4">
+    <div class="panel w-full max-w-md p-5 shadow-2xl border-yellow-500/60">
+      <div class="text-yellow-300 text-xs font-black uppercase tracking-wide mb-2">Mobile warning</div>
+      <h2 class="text-xl font-black text-white mb-2">This viewer probably will not work well on mobile.</h2>
+      <p class="text-sm text-slate-300 leading-relaxed">The map and analysis files are large, so phones and small tablets may be slow, run out of memory, or display the layout incorrectly. A laptop or desktop browser is strongly recommended.</p>
+      <div class="mt-4 flex justify-end">
+        <button class="btn active" onclick="dismissMobileWarning()">Continue anyway</button>
+      </div>
+    </div>
+  </div>
+
   <div id="samplePickerModal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/80 z-[9999] p-4">
     <div class="panel w-full max-w-xl p-5 shadow-2xl border-blue-500/50">
       <div class="flex items-start justify-between gap-4 mb-3">
@@ -193,7 +204,7 @@ const FALLBACK_EMBEDDED_ANALYSES = [
   }
 ];
 
-const SAMPLE_SET_NAME = 'BFI Viewer Beta Samples';
+const SAMPLE_SET_NAME = 'BFI Viewer Beta';
 const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
 const COLUMBUS_ADDRESS_LABEL = '39.984, -83.031 (Grandview Heights, OH)';
 const SAMPLE_FILE_PATHS = [
@@ -287,8 +298,11 @@ function isColumbusSample(entry){
 
 function prettifySampleLabel(name){
   const raw = String(name || '');
-  if (/39\.98404_-83/i.test(raw)) return COLUMBUS_ADDRESS_LABEL;
-  return raw
+  let base = raw.split('/').pop() || raw;
+  try { base = decodeURIComponent(base); } catch {}
+  if (/39\.98404_-83/i.test(base)) return COLUMBUS_ADDRESS_LABEL;
+  if (/Copenhagen_Municipality_Denmark/i.test(base)) return 'Copenhagen, Denmark';
+  return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
     .replace(/_/g, ' ')
@@ -300,6 +314,9 @@ function sampleKey(entry){
 }
 
 function sampleLabel(entry){
+  const raw = String(entry?.name || entry?.url || entry?.label || '');
+  if (/39\.98404_-83/i.test(raw)) return COLUMBUS_ADDRESS_LABEL;
+  if (/Copenhagen_Municipality_Denmark/i.test(raw)) return 'Copenhagen, Denmark';
   return entry?.label || prettifySampleLabel(entry?.name || entry?.url || 'sample');
 }
 
@@ -476,6 +493,7 @@ async function loadSelectedSamplesFromPicker(){
   renderSamplePickerList();
   updateSamplePickerControls();
   populateSamplePrioritySelect();
+  closeSamplePicker();
 }
 
 function setLoadingSampleButton(key, label, phase = 'Queued', pct = 0){
@@ -603,11 +621,11 @@ async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
           embedded: true,
           sample: true,
           sampleGroup: SAMPLE_SET_NAME,
-          label: entry.label || null
+          label: sampleLabel(entry)
         }
       );
       if (item) {
-        if (!entry.label) item.label = item.label || sampleLabel(entry);
+        item.label = sampleLabel(entry);
         added += 1;
         lastItem = item;
       }
@@ -1224,7 +1242,25 @@ function drawTypeBuckets(b, layer){
   [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{ if(b[k]?.length) L.polyline(b[k], { color:c, weight:dynamicWeight(r), opacity:.65 }).addTo(layer); });
 }
 
-window.addEventListener('load', initMap);
+function isLikelyMobileDevice(){
+  return window.matchMedia('(max-width: 768px)').matches || (navigator.maxTouchPoints > 0 && window.innerWidth < 900);
+}
+function showMobileWarningIfNeeded(){
+  const modal = document.getElementById('mobileWarningModal');
+  if (!modal || !isLikelyMobileDevice()) return;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+function dismissMobileWarning(){
+  const modal = document.getElementById('mobileWarningModal');
+  if (!modal) return;
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
+window.addEventListener('load', () => {
+  showMobileWarningIfNeeded();
+  initMap();
+});
 </script>
 </body>
 </html>
