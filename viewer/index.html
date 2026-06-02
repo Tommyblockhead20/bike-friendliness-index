@@ -55,7 +55,7 @@
         <section class="panel p-4 space-y-4 overflow-y-auto">
           <div>
             <div class="label mb-2">Analyses</div>
-            <button class="btn w-full" onclick="document.getElementById('fileInput').click()">Upload analysis</button>
+            <button class="btn w-full" onclick="document.getElementById('fileInput').click()">Upload custom analysis</button>
             <input id="fileInput" type="file" class="hidden" multiple accept=".bfiana,.json,.zip" onchange="handleFiles(this.files)" />
             <select id="datasetSelect" class="hidden" onchange="selectDataset(this.value)"></select>
             <div id="loadedDatasetButtons" class="mt-3 space-y-2"></div>
@@ -73,8 +73,8 @@
             <div>
               <div class="label mb-2">City aggregation</div>
               <div class="grid grid-cols-2 gap-2">
-                <button id="agg-citywide" class="btn active" onclick="setCityAggregation('citywide')">City Wide</button>
-                <button id="agg-best" class="btn" onclick="setCityAggregation('best')">Best Area</button>
+                <button id="agg-citywide" class="btn" onclick="setCityAggregation('citywide')">City Wide</button>
+                <button id="agg-best" class="btn active" onclick="setCityAggregation('best')">Best Area</button>
               </div>
             </div>
             <div>
@@ -159,7 +159,7 @@
       <div class="flex items-start justify-between gap-4 mb-3">
         <div>
           <h2 class="text-xl font-black text-white">Load more samples?</h2>
-          <p class="text-xs text-slate-400 mt-1">1 example of each mode is preloaded. You may select 1 or 2 more cities to load as well (max 2 due to memory constraints). To view a different set of samples later, reload the page; that is the cleanest way to clear the large sample files from memory.</p>
+          <p class="text-xs text-slate-400 mt-1">1 example of each mode is preloaded. You may select 1 or 2 more cities to load as well (max 2 due to memory constraints). To view a different set of samples later, reload the page; browsers do not reliably release these large sample files from memory until a reload.</p>
         </div>
         <button class="btn" onclick="closeSamplePicker()">Close</button>
       </div>
@@ -169,7 +169,7 @@
       <div class="mt-3 flex items-center justify-between gap-3">
         <div id="samplePickerNote" class="text-xs text-slate-400">0 / 2 selected</div>
         <div class="flex gap-2">
-          <button class="btn" onclick="closeSamplePicker()">Not now</button>
+          <button id="samplePickerCancelBtn" class="btn" onclick="handleSamplePickerSecondary()">Not now</button>
           <button id="loadSelectedSamplesBtn" class="btn active" onclick="loadSelectedSamplesFromPicker()">Load selected</button>
         </div>
       </div>
@@ -178,10 +178,10 @@
 
 <script>
 const state = {
-  mode:'address', focus:'balanced', addressView:'none', cityAgg:'citywide', pointsView:'score', tolerance:'25',
+  mode:'address', focus:'balanced', addressView:'none', cityAgg:'best', pointsView:'score', tolerance:'25',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
   sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false,
-  sampleLoadingItems:{}, additionalSamplesLocked:false
+  sampleLoadingItems:{}, additionalSamplesLocked:false, additionalSamplesLoadedCount:0
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -195,6 +195,7 @@ const FALLBACK_EMBEDDED_ANALYSES = [
 
 const SAMPLE_SET_NAME = 'BFI Viewer Beta Samples';
 const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
+const COLUMBUS_ADDRESS_LABEL = '39.984, -83.031 (Grandview Heights, OH)';
 const SAMPLE_FILE_PATHS = [
   'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
   'sample-files/Helsinki_Finland.viewer-pruned.zip',
@@ -203,6 +204,7 @@ const SAMPLE_FILE_PATHS = [
   'sample-files/Copenhagen_Municipality_Denmark.viewer-pruned.zip',
   'sample-files/London_United_Kingdom.viewer-pruned.zip',
   'sample-files/Utrecht_Netherlands.viewer-pruned.zip',
+  'sample-files/Minneapolis_MN.viewer-pruned.zip',
   'sample-files/39.98404_-83.viewer-pruned.zip'
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
@@ -285,7 +287,7 @@ function isColumbusSample(entry){
 
 function prettifySampleLabel(name){
   const raw = String(name || '');
-  if (/39\.98404_-83/i.test(raw)) return 'Columbus, OH Address Analysis';
+  if (/39\.98404_-83/i.test(raw)) return COLUMBUS_ADDRESS_LABEL;
   return raw
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
@@ -389,6 +391,17 @@ function closeSamplePicker(){
   modal.classList.remove('flex');
 }
 
+function finishSampleSelection(){
+  state.additionalSamplesLocked = true;
+  closeSamplePicker();
+  populateSamplePrioritySelect();
+}
+
+function handleSamplePickerSecondary(){
+  if (state.additionalSamplesLoadedCount > 0) finishSampleSelection();
+  else closeSamplePicker();
+}
+
 function selectedSampleKeys(){
   return Array.from(document.querySelectorAll('.sample-pick:checked')).map(box => box.value);
 }
@@ -396,18 +409,26 @@ function selectedSampleKeys(){
 function updateSamplePickerControls(){
   const boxes = Array.from(document.querySelectorAll('.sample-pick'));
   const selected = boxes.filter(box => box.checked);
-  const atLimit = selected.length >= 2;
+  const remainingSlots = Math.max(0, 2 - (state.additionalSamplesLoadedCount || 0));
+  const atLimit = selected.length >= remainingSlots;
   boxes.forEach(box => {
     box.disabled = state.sampleLoading || state.sampleLoadedKeys.has(box.value) || (!box.checked && atLimit);
   });
   const note = document.getElementById('samplePickerNote');
-  if (note) note.textContent = state.sampleLoading ? 'Loading selected samples...' : `${selected.length} / 2 selected`;
+  if (note) {
+    note.textContent = state.sampleLoading
+      ? 'Loading selected samples...'
+      : `${state.additionalSamplesLoadedCount || 0} / 2 extra sample(s) loaded · ${selected.length} selected`;
+  }
   const loadBtn = document.getElementById('loadSelectedSamplesBtn');
-  if (loadBtn) loadBtn.disabled = state.sampleLoading || selected.length < 1;
+  if (loadBtn) loadBtn.disabled = state.sampleLoading || remainingSlots < 1 || selected.length < 1;
+  const cancelBtn = document.getElementById('samplePickerCancelBtn');
+  if (cancelBtn) cancelBtn.textContent = state.additionalSamplesLoadedCount > 0 ? 'Done selecting' : 'Not now';
 }
 
 function onSampleCheckboxChange(box){
-  if (selectedSampleKeys().length > 2) box.checked = false;
+  const remainingSlots = Math.max(0, 2 - (state.additionalSamplesLoadedCount || 0));
+  if (selectedSampleKeys().length > remainingSlots) box.checked = false;
   updateSamplePickerControls();
 }
 
@@ -419,6 +440,12 @@ function renderSamplePickerList(){
     updateSamplePickerControls();
     return;
   }
+  const remainingSlots = Math.max(0, 2 - (state.additionalSamplesLoadedCount || 0));
+  if (remainingSlots < 1) {
+    list.innerHTML = `<div class="text-slate-400 p-2">You have loaded the maximum of 2 extra samples. Click <span class="text-white font-bold">Done selecting</span> to close this menu. To view a different sample set later, reload the page to clear the large sample files from memory.</div>`;
+    updateSamplePickerControls();
+    return;
+  }
   const pending = pendingSampleEntries();
   if (!pending.length) {
     list.innerHTML = `<div class="text-slate-400 p-2">No hosted samples left to load.</div>`;
@@ -426,28 +453,29 @@ function renderSamplePickerList(){
     return;
   }
 
-  const shouldPreselectColumbus = !state.samplePickerPreselected && pending.some(isColumbusSample);
   const html = pending.map(entry => {
     const key = sampleKey(entry);
     const isColumbus = isColumbusSample(entry);
-    const checked = shouldPreselectColumbus && isColumbus ? 'checked' : '';
     const badge = isColumbus ? '<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-blue-900/70 text-blue-200 border border-blue-500/40">address</span>' : '<span class="ml-2 text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-600">city</span>';
     return `<label class="flex items-center gap-3 rounded-lg p-2 hover:bg-slate-800/80 cursor-pointer">
-      <input class="sample-pick" type="checkbox" value="${escapeHtml(key)}" ${checked} onchange="onSampleCheckboxChange(this)" />
-      <span class="min-w-0 grow"><span class="text-white font-bold">${escapeHtml(sampleLabel(entry))}</span>${badge}<br><span class="text-[11px] text-slate-500">${escapeHtml(entry.name || entry.url || '')}</span></span>
+      <input class="sample-pick" type="checkbox" value="${escapeHtml(key)}" onchange="onSampleCheckboxChange(this)" />
+      <span class="min-w-0 grow"><span class="text-white font-bold">${escapeHtml(sampleLabel(entry))}</span>${badge}</span>
     </label>`;
   }).join('');
   list.innerHTML = html;
-  if (shouldPreselectColumbus) state.samplePickerPreselected = true;
   updateSamplePickerControls();
 }
 async function loadSelectedSamplesFromPicker(){
-  const keys = selectedSampleKeys();
+  const remainingSlots = Math.max(0, 2 - (state.additionalSamplesLoadedCount || 0));
+  const keys = selectedSampleKeys().slice(0, remainingSlots);
   if (!keys.length || state.sampleLoading) return;
-  const added = await loadSelectedSampleEntries(keys.slice(0, 2));
-  if (added > 0) state.additionalSamplesLocked = true;
+  const added = await loadSelectedSampleEntries(keys);
+  if (added > 0) {
+    state.additionalSamplesLoadedCount = Math.min(2, (state.additionalSamplesLoadedCount || 0) + Math.min(added, keys.length));
+  }
+  renderSamplePickerList();
+  updateSamplePickerControls();
   populateSamplePrioritySelect();
-  closeSamplePicker();
 }
 
 function setLoadingSampleButton(key, label, phase = 'Queued', pct = 0){
@@ -615,7 +643,7 @@ function showNewDataset(item){
 }
 
 function columbusAddressIsLoaded(){
-  return state.datasets.some(d => d.kind === 'address' && /columbus|39\.98404_-83/i.test(`${d.label || ''} ${d.name || ''}`));
+  return state.datasets.some(d => d.kind === 'address' && /columbus|grandview|39\.984/i.test(`${d.label || ''} ${d.name || ''}`));
 }
 
 async function loadSampleAnalyses(){
@@ -627,6 +655,8 @@ async function loadSampleAnalyses(){
   state.sampleErrors = [];
   state.sampleLoading = false;
   state.samplePickerPreselected = true;
+  state.additionalSamplesLoadedCount = 0;
+  state.additionalSamplesLocked = false;
 
   updateFileSummary();
   rebuildSelect();
@@ -639,17 +669,17 @@ async function loadSampleAnalyses(){
 
   const columbusEntry = entries.find(isColumbusSample);
   if (columbusEntry && !state.sampleLoadedKeys.has(sampleKey(columbusEntry))) {
-    setSampleStatus('Loading Columbus, OH Address Analysis...', 0, 1);
+    setSampleStatus(`Loading ${COLUMBUS_ADDRESS_LABEL}...`, 0, 1);
     await nextPaint();
     await loadSelectedSampleEntries([sampleKey(columbusEntry)]);
   } else if (!columbusAddressIsLoaded()) {
-    state.sampleErrors.push('Columbus, OH Address Analysis was not found in hosted samples.');
+    state.sampleErrors.push(`${COLUMBUS_ADDRESS_LABEL} was not found in hosted samples.`);
   }
 
   const pendingCount = pendingSampleEntries().length;
   const preloaded = columbusAddressIsLoaded()
-    ? 'Mackinac Island and Columbus, OH Address Analysis are preloaded.'
-    : 'Mackinac Island is preloaded. Columbus, OH Address Analysis could not be loaded automatically.';
+    ? `Mackinac Island and ${COLUMBUS_ADDRESS_LABEL} are preloaded.`
+    : `Mackinac Island is preloaded. ${COLUMBUS_ADDRESS_LABEL} could not be loaded automatically.`;
   setSampleStatus(`${preloaded} ${pendingCount} additional hosted city sample(s) are available; choose up to 2 more when needed.`, null, null);
   await nextPaint();
   populateSamplePrioritySelect();
