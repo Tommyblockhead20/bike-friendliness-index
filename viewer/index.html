@@ -98,7 +98,7 @@
             </div>
             <div>
               <div class="flex justify-between items-end mb-2"><div class="label">Danger tolerance</div><div id="tolLabel" class="text-sm text-blue-400 font-black">25 (default)</div></div>
-              <input id="tolSlider" type="range" min="25" max="100" step="25" value="25" class="w-full" oninput="setTolerance(this.value)" />
+              <input id="tolSlider" type="range" min="25" max="100" step="25" value="25" class="w-full" onchange="setTolerance(this.value)" />
               
             </div>
           </div>
@@ -219,13 +219,17 @@ const SAMPLE_FILE_PATHS = [
   'sample-files/39.98404_-83.viewer-pruned.zip'
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
-let map, layers = {}, zoomRenderTimer = null;
+let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
+const canvasRenderer = L.canvas({ padding: 0.5 });
+const dynamicVectors = [];
+const DENSE_POINT_MIN_ZOOM = 12;
+const DENSE_POINT_LIMIT = 3000;
 
 async function initMap(){
-  map = L.map('map', { zoomControl:true }).setView([39.8283,-98.5795], 4);
+  map = L.map('map', { zoomControl:true, preferCanvas:true }).setView([39.8283,-98.5795], 4);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
-  map.on('zoomend', () => { clearTimeout(zoomRenderTimer); zoomRenderTimer = setTimeout(() => render(), 60); });
+  map.on('zoomend', () => { clearTimeout(zoomRenderTimer); zoomRenderTimer = setTimeout(updateDynamicWeightsOnly, 60); });
 
   setSampleStatus('Loading Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
@@ -241,7 +245,44 @@ async function initMap(){
   });
 }
 
-function resetLayers(){ Object.values(layers).forEach(l => l.clearLayers()); }
+function resetLayers(){
+  dynamicVectors.length = 0;
+  Object.values(layers).forEach(l => l.clearLayers());
+}
+function clearOverlayLayers(){
+  ['bad','stress','type','dest'].forEach(k => layers[k]?.clearLayers());
+  for (let i = dynamicVectors.length - 1; i >= 0; i--) {
+    if (dynamicVectors[i].overlay) dynamicVectors.splice(i, 1);
+  }
+}
+function addDynamicPolyline(latlngs, options, layer, overlay=false){
+  const baseWeight = options.baseWeight ?? options.weight ?? 1;
+  const poly = L.polyline(latlngs, {
+    renderer: canvasRenderer,
+    interactive: false,
+    ...options,
+    weight: dynamicWeight(baseWeight)
+  }).addTo(layer);
+  dynamicVectors.push({ poly, baseWeight, overlay });
+  return poly;
+}
+function updateDynamicWeightsOnly(){
+  if (!map) return;
+  for (const item of dynamicVectors) {
+    if (!item?.poly?.setStyle) continue;
+    item.poly.setStyle({ weight: dynamicWeight(item.baseWeight) });
+  }
+}
+function renderOverlaysOnly(){
+  clearOverlayLayers();
+  const ds = activeDataset();
+  if (!ds) return;
+  drawOverlays(ds.data, currentMetrics());
+}
+function shouldDrawDensePoints(){ return map && map.getZoom() >= DENSE_POINT_MIN_ZOOM; }
+function densePointNote(label, count){
+  return noteBlock(label, `${fmtView(count)} points hidden at this zoom. Zoom in to level ${DENSE_POINT_MIN_ZOOM}+ to draw them.`);
+}
 function activeDataset(){ return state.datasets.find(d => d.id === state.currentId) || null; }
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
 function fmtSig(n, sig=1){ return Number.isFinite(+n) ? String(Number((+n).toPrecision(sig))) : '0'; }
@@ -835,6 +876,12 @@ function updateLoadedDatasetButtons(){
     const source = d.sample || d.embedded ? 'sample' : 'upload';
     btn.innerHTML = `<div class="flex items-center justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-400">${kind}</span><span class="text-[10px] text-slate-500">${source}</span></div><div class="mt-1 text-white font-black truncate">${escapeHtml(d.label)}</div>`;
     box.appendChild(btn);
+    const unload = document.createElement('button');
+    unload.type = 'button';
+    unload.className = 'btn w-full text-left text-[10px] text-slate-400 -mt-1';
+    unload.textContent = 'Unload from this tab';
+    unload.onclick = (e) => { e.stopPropagation(); unloadDataset(d.id); };
+    box.appendChild(unload);
   });
   Object.entries(state.sampleLoadingItems || {}).forEach(([key, item]) => {
     const entry = state.sampleEntries.find(e => sampleKey(e) === key);
@@ -899,18 +946,38 @@ function syncModeButtons(){
   document.getElementById('cityControls').classList.toggle('hidden', state.mode!=='city');
 }
 function selectDataset(id){ state.currentId = id; state.autoFitPending = true; updateLoadedDatasetButtons(); render(); }
+function unloadDataset(id){
+  const idx = state.datasets.findIndex(d => d.id === id);
+  if (idx < 0) return;
+  state.datasets.splice(idx, 1);
+  if (state.currentId === id) {
+    const next = state.datasets.find(d => d.kind === state.mode) || state.datasets[0] || null;
+    state.currentId = next?.id || null;
+    if (next) state.mode = next.kind;
+    state.autoFitPending = true;
+  }
+  syncModeButtons();
+  rebuildSelect();
+  updateFileSummary();
+  render();
+}
 function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
 function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
 function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
-function setTolerance(v){ state.tolerance=String(v); document.getElementById('tolLabel').textContent=String(v)==='25' ? '25 (default)' : v; render(); }
+function setTolerance(v){
+  state.tolerance=String(v);
+  document.getElementById('tolLabel').textContent=String(v)==='25' ? '25 (default)' : v;
+  clearTimeout(toleranceTimer);
+  toleranceTimer = setTimeout(render, 150);
+}
 function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
   if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
   if (name === 'type' && state.overlays.type) state.overlays.stress = false;
   ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
-  render();
+  renderOverlaysOnly();
 }
 
 function score(m, focus=state.focus){
@@ -970,7 +1037,6 @@ function currentMetrics(){
 
 function render(){
   resetLayers();
-  rebuildSelect();
   const ds = activeDataset();
   if (!ds) { updateStats(null); return; }
   const data = ds.data, m = currentMetrics();
@@ -1007,7 +1073,7 @@ function updateStats(m){
 
 function drawBoundary(data){
   if (data.lastCityGeoJSON) {
-    const g = L.geoJSON(data.lastCityGeoJSON, { style:{ color:'#020617', weight:3, fill:false, opacity:.9 } }).addTo(layers.boundary);
+    const g = L.geoJSON(data.lastCityGeoJSON, { renderer: canvasRenderer, interactive:false, style:{ color:'#020617', weight:3, fill:false, opacity:.9 } }).addTo(layers.boundary);
     if (state.autoFitPending) { try { map.fitBounds(g.getBounds(), {padding:[25,25]}); } catch{} }
   }
 }
@@ -1149,20 +1215,24 @@ function drawCity(data){
 function drawHull(m){
   const geo = m.hullLow || m.hullGrid || m.hullSmooth;
   if (!geo) return;
-  const g = L.geoJSON(geo, { style:{ color:'#3b82f6', weight:2, fillColor:'#3b82f6', fillOpacity:.13 } }).addTo(layers.hull);
+  const g = L.geoJSON(geo, { renderer: canvasRenderer, interactive:false, style:{ color:'#3b82f6', weight:2, fillColor:'#3b82f6', fillOpacity:.13 } }).addTo(layers.hull);
   if (state.autoFitPending) { try { map.fitBounds(g.getBounds(), {padding:[25,25]}); } catch{} }
-  if (m.hullSmooth) L.geoJSON(m.hullSmooth, { style:{ color:'#ef4444', weight:2, fill:false } }).addTo(layers.hull);
+  if (m.hullSmooth) L.geoJSON(m.hullSmooth, { renderer: canvasRenderer, interactive:false, style:{ color:'#ef4444', weight:2, fill:false } }).addTo(layers.hull);
 }
 
-function drawGradient(buckets, layer){
-  (buckets||[]).forEach((lines,i)=>{ if(lines?.length) L.polyline(lines, { color:`hsl(${120-i*13},100%,50%)`, weight:dynamicWeight(1), opacity:.75 }).addTo(layer); });
+function drawGradient(buckets, layer, overlay=false){
+  (buckets||[]).forEach((lines,i)=>{
+    if(lines?.length) addDynamicPolyline(lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay);
+  });
 }
-function drawRoutes(lines, layer){
-  (lines||[]).forEach(l => { if(l.seg) L.polyline(l.seg, { color:'#16a34a', weight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }).addTo(layer); });
+function drawRoutes(lines, layer, overlay=false){
+  (lines||[]).forEach(l => {
+    if(l.seg) addDynamicPolyline(l.seg, { color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }, layer, overlay);
+  });
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
-    if (p.lat && p.lon) L.circleMarker([p.lat,p.lon], { radius:9, color:'#67e8f9', fillColor:'#020617', fillOpacity:.7, weight:3 }).bindPopup(`<b>Furthest Reach #${i+1}</b><br>${fmtView(p.d)} mi ${p.dir||''}`).addTo(layers.reach);
+    if (p.lat && p.lon) L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:9, color:'#67e8f9', fillColor:'#020617', fillOpacity:.7, weight:3 }).bindPopup(`<b>Furthest Reach #${i+1}</b><br>${fmtView(p.d)} mi ${p.dir||''}`).addTo(layers.reach);
   });
 }
 function cityRankDisclaimer(data){
@@ -1191,33 +1261,45 @@ function drawOverlays(data, m){
 
   if (state.overlays.type) {
     const c = data.cityLines?.classification;
-    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type);
-    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type);
+    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, true);
+    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, true);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
   if (state.overlays.stress) {
     const cityStress = data.cityLines?.stress;
     const addrStress = m?.lines?.stress;
-    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress);
-    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress);
+    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, true);
+    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, true);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
   if (state.overlays.dest) {
     const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-    pois.forEach(p => {
-      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
-      L.circleMarker([p.lat,p.lon], { radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 }).bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`).addTo(layers.dest);
-    });
+    if (!shouldDrawDensePoints() && pois.length > 300) {
+      keys.push(densePointNote('Destinations hidden', pois.length));
+    } else {
+      pois.slice(0, DENSE_POINT_LIMIT).forEach(p => {
+        const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+        L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
+          .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
+          .addTo(layers.dest);
+      });
+      if (pois.length > DENSE_POINT_LIMIT) keys.push(noteBlock('Destinations limited', `Showing first ${DENSE_POINT_LIMIT.toLocaleString()} of ${pois.length.toLocaleString()} points to protect browser performance.`));
+    }
     keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
   }
   if (state.overlays.bad) {
     const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-    pts.forEach(p => {
-      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
-      L.circleMarker([p.lat,p.lon], { radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
-        .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
-        .addTo(layers.bad);
-    });
+    if (!shouldDrawDensePoints() && pts.length > 300) {
+      keys.push(densePointNote('Higher Risk Intersections hidden', pts.length));
+    } else {
+      pts.slice(0, DENSE_POINT_LIMIT).forEach(p => {
+        const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+        L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
+          .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
+          .addTo(layers.bad);
+      });
+      if (pts.length > DENSE_POINT_LIMIT) keys.push(noteBlock('Higher Risk Intersections limited', `Showing first ${DENSE_POINT_LIMIT.toLocaleString()} of ${pts.length.toLocaleString()} points to protect browser performance.`));
+    }
     keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
   }
   document.getElementById('legend').innerHTML = keys.join('');
@@ -1235,11 +1317,15 @@ function keyBlock(title, items){
 function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
-function drawStressBuckets(b, layer){
-  [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{ if(b[k]?.length) L.polyline(b[k], { color:c, weight:dynamicWeight(r), opacity:.62 }).addTo(layer); });
+function drawStressBuckets(b, layer, overlay=false){
+  [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
+    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
+  });
 }
-function drawTypeBuckets(b, layer){
-  [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{ if(b[k]?.length) L.polyline(b[k], { color:c, weight:dynamicWeight(r), opacity:.65 }).addTo(layer); });
+function drawTypeBuckets(b, layer, overlay=false){
+  [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
+    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
+  });
 }
 
 function isLikelyMobileDevice(){
