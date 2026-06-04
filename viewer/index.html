@@ -224,6 +224,11 @@ const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead
 let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
+const renderJobs = { main:0, type:0, stress:0, dest:0, bad:0 };
+const RENDER_JOB_KEYS = ['main','type','stress','dest','bad'];
+const POLYLINE_RENDER_BATCH = 90;
+const POINT_RENDER_BATCH = 180;
+const MULTILINE_SEGMENTS_PER_LAYER = 140;
 const DENSE_POINT_MIN_ZOOM = 12;
 const BIKE_PARKING_MIN_ZOOM = 13;
 
@@ -254,16 +259,50 @@ async function initMap(){
 }
 
 function resetLayers(){
+  cancelRenderJobs();
   dynamicVectors.length = 0;
   Object.values(layers).forEach(l => l.clearLayers());
 }
-function clearOverlayLayers(){
-  ['bad','stress','type','dest'].forEach(k => layers[k]?.clearLayers());
+
+function bumpRenderJob(key){
+  renderJobs[key] = (renderJobs[key] || 0) + 1;
+  return renderJobs[key];
+}
+function cancelRenderJob(key){ bumpRenderJob(key); }
+function cancelRenderJobs(keys=RENDER_JOB_KEYS){ keys.forEach(cancelRenderJob); }
+function scheduleChunkedRender(jobKey, items, drawItem, batchSize=POLYLINE_RENDER_BATCH){
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return;
+  const token = bumpRenderJob(jobKey);
+  let index = 0;
+  const schedule = window.requestAnimationFrame || (cb => setTimeout(cb, 0));
+  function step(){
+    if (renderJobs[jobKey] !== token) return;
+    const end = Math.min(index + batchSize, list.length);
+    for (; index < end; index++) drawItem(list[index], index);
+    if (index < list.length) schedule(step);
+  }
+  step();
+}
+function clearDynamicVectorsByOwner(owner){
   for (let i = dynamicVectors.length - 1; i >= 0; i--) {
-    if (dynamicVectors[i].overlay) dynamicVectors.splice(i, 1);
+    if (dynamicVectors[i].owner === owner) dynamicVectors.splice(i, 1);
   }
 }
-function addDynamicPolyline(latlngs, options, layer, overlay=false){
+function clearMainLayer(){
+  cancelRenderJob('main');
+  layers.main?.clearLayers();
+  clearDynamicVectorsByOwner('main');
+}
+function clearOverlayLayer(name){
+  cancelRenderJob(name);
+  layers[name]?.clearLayers();
+  clearDynamicVectorsByOwner(name);
+}
+function clearOverlayLayers(){
+  ['bad','stress','type','dest'].forEach(clearOverlayLayer);
+}
+function addDynamicPolyline(latlngs, options, layer, owner='main'){
   const baseWeight = options.baseWeight ?? options.weight ?? 1;
   const poly = L.polyline(latlngs, {
     renderer: canvasRenderer,
@@ -271,8 +310,24 @@ function addDynamicPolyline(latlngs, options, layer, overlay=false){
     ...options,
     weight: dynamicWeight(baseWeight)
   }).addTo(layer);
-  dynamicVectors.push({ poly, baseWeight, overlay });
+  dynamicVectors.push({ poly, baseWeight, owner });
   return poly;
+}
+function isMultiPolyline(latlngs){
+  return Array.isArray(latlngs) && Array.isArray(latlngs[0]) && Array.isArray(latlngs[0][0]);
+}
+function pushPolylineChunks(items, latlngs, options){
+  if (!latlngs?.length) return;
+  if (isMultiPolyline(latlngs) && latlngs.length > MULTILINE_SEGMENTS_PER_LAYER) {
+    for (let i = 0; i < latlngs.length; i += MULTILINE_SEGMENTS_PER_LAYER) {
+      items.push({ latlngs: latlngs.slice(i, i + MULTILINE_SEGMENTS_PER_LAYER), options });
+    }
+  } else {
+    items.push({ latlngs, options });
+  }
+}
+function drawPolylineItemsChunked(jobKey, items, layer, owner=jobKey){
+  scheduleChunkedRender(jobKey, items, item => addDynamicPolyline(item.latlngs, item.options, layer, owner), POLYLINE_RENDER_BATCH);
 }
 function updateDynamicWeightsOnly(){
   if (!map) return;
@@ -284,7 +339,7 @@ function updateDynamicWeightsOnly(){
 function renderOverlaysOnly(){
   clearOverlayLayers();
   const ds = activeDataset();
-  if (!ds) return;
+  if (!ds) { updateOverlayLegend(null, null); return; }
   drawOverlays(ds.data, currentMetrics());
 }
 function shouldDrawBikeParking(){ return map && map.getZoom() >= BIKE_PARKING_MIN_ZOOM; }
@@ -294,7 +349,11 @@ function maybeRefreshBikeParkingOverlay(){
   if (state.lastBikeParkingVisible === undefined) state.lastBikeParkingVisible = visible;
   if (state.overlays.dest && state.lastBikeParkingVisible !== visible) {
     state.lastBikeParkingVisible = visible;
-    renderOverlaysOnly();
+    const ds = activeDataset();
+    if (!ds) return;
+    clearOverlayLayer('dest');
+    drawOverlayLayer('dest', ds.data, currentMetrics());
+    updateOverlayLegend(ds.data, currentMetrics());
   } else {
     state.lastBikeParkingVisible = visible;
   }
@@ -1027,7 +1086,17 @@ function syncModeButtons(){
 function selectDataset(id){ state.currentId = id; state.autoFitPending = true; updateLoadedDatasetButtons(); render(); }
 function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
 function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
-function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
+function setAddressView(v){
+  state.addressView=v;
+  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
+  const ds = activeDataset();
+  if (ds?.kind === 'address') {
+    clearMainLayer();
+    drawAddressMain(currentMetrics());
+  } else {
+    render();
+  }
+}
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
 function setTolerance(v){
@@ -1038,10 +1107,24 @@ function setTolerance(v){
 }
 function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
-  if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
-  if (name === 'type' && state.overlays.type) state.overlays.stress = false;
+  if (name === 'stress' && state.overlays.stress) {
+    state.overlays.type = false;
+    clearOverlayLayer('type');
+  }
+  if (name === 'type' && state.overlays.type) {
+    state.overlays.stress = false;
+    clearOverlayLayer('stress');
+  }
   ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
-  renderOverlaysOnly();
+  const ds = activeDataset();
+  if (!ds) return;
+  if (state.overlays[name]) {
+    clearOverlayLayer(name);
+    drawOverlayLayer(name, ds.data, currentMetrics());
+  } else {
+    clearOverlayLayer(name);
+  }
+  updateOverlayLegend(ds.data, currentMetrics());
 }
 
 function score(m, focus=state.focus){
@@ -1102,7 +1185,7 @@ function currentMetrics(){
 function render(){
   resetLayers();
   const ds = activeDataset();
-  if (!ds) { updateStats(null); return; }
+  if (!ds) { updateStats(null); updateOverlayLegend(null, null); return; }
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
@@ -1147,9 +1230,13 @@ function drawAddress(data, m){
   if (c) { L.marker([c.lat, c.lng]).bindPopup(data.addressInput || 'Start address').addTo(layers.points); if (state.autoFitPending) map.setView([c.lat,c.lng], 12); }
   if (!m) return;
   drawHull(m);
-  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main);
-  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main);
+  drawAddressMain(m);
   drawReachPoints(m);
+}
+function drawAddressMain(m){
+  if (!m) return;
+  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main, 'main');
+  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main, 'main');
 }
 
 
@@ -1284,15 +1371,19 @@ function drawHull(m){
   if (m.hullSmooth) L.geoJSON(m.hullSmooth, { renderer: canvasRenderer, interactive:false, style:{ color:'#ef4444', weight:2, fill:false } }).addTo(layers.hull);
 }
 
-function drawGradient(buckets, layer, overlay=false){
+function drawGradient(buckets, layer, owner='main'){
+  const items = [];
   (buckets||[]).forEach((lines,i)=>{
-    if(lines?.length) addDynamicPolyline(lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay);
+    if(lines?.length) pushPolylineChunks(items, lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 });
   });
+  drawPolylineItemsChunked(owner, items, layer, owner);
 }
-function drawRoutes(lines, layer, overlay=false){
+function drawRoutes(lines, layer, owner='main'){
+  const items = [];
   (lines||[]).forEach(l => {
-    if(l.seg) addDynamicPolyline(l.seg, { color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }, layer, overlay);
+    if(l.seg) items.push({ latlngs:l.seg, options:{ color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 } });
   });
+  drawPolylineItemsChunked(owner, items, layer, owner);
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -1317,51 +1408,82 @@ function cityRankDisclaimer(data){
 }
 
 function drawOverlays(data, m){
+  updateOverlayLegend(data, m);
+  ['type','stress','dest','bad'].forEach(name => {
+    if (state.overlays[name]) drawOverlayLayer(name, data, m);
+  });
+}
+function updateOverlayLegend(data, m){
   const keys = [];
-  const pointKey = cityPointKey();
-  if (pointKey) keys.push(pointKey);
-  const rankNote = cityRankDisclaimer(data);
-  if (rankNote) keys.push(rankNote);
+  if (data) {
+    const pointKey = cityPointKey();
+    if (pointKey) keys.push(pointKey);
+    const rankNote = cityRankDisclaimer(data);
+    if (rankNote) keys.push(rankNote);
+  }
 
   if (state.overlays.type) {
-    const c = data.cityLines?.classification;
-    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, true);
-    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, true);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
   if (state.overlays.stress) {
-    const cityStress = data.cityLines?.stress;
-    const addrStress = m?.lines?.stress;
-    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, true);
-    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, true);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
   if (state.overlays.dest) {
-    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-    const bikeParkingVisible = shouldDrawBikeParking();
-    let bikeParkingHidden = 0;
-    pois.forEach(p => {
-      const isBikeParking = isBikeParkingPoi(p);
-      if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
-      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
-        .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
-        .addTo(layers.dest);
-    });
-    if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
+    const info = data ? destinationOverlayInfo(data, m) : { bikeParkingHidden:0 };
+    if (info.bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${info.bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
     keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
   }
   if (state.overlays.bad) {
-    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-    pts.forEach(p => {
-      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
-        .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
-        .addTo(layers.bad);
-    });
     keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
   }
   document.getElementById('legend').innerHTML = keys.join('');
+}
+function destinationOverlayInfo(data, m){
+  const sourcePois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
+  const bikeParkingVisible = shouldDrawBikeParking();
+  let bikeParkingHidden = 0;
+  const visiblePois = [];
+  sourcePois.forEach(p => {
+    if (!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lon)) return;
+    const isBikeParking = isBikeParkingPoi(p);
+    if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
+    visiblePois.push(p);
+  });
+  return { visiblePois, bikeParkingHidden };
+}
+function drawOverlayLayer(name, data, m){
+  if (name === 'type') {
+    const c = data.cityLines?.classification;
+    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, 'type');
+    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, 'type');
+    return;
+  }
+  if (name === 'stress') {
+    const cityStress = data.cityLines?.stress;
+    const addrStress = m?.lines?.stress;
+    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, 'stress');
+    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, 'stress');
+    return;
+  }
+  if (name === 'dest') {
+    const { visiblePois } = destinationOverlayInfo(data, m);
+    scheduleChunkedRender('dest', visiblePois, p => {
+      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
+        .bindPopup(() => `${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
+        .addTo(layers.dest);
+    }, POINT_RENDER_BATCH);
+    return;
+  }
+  if (name === 'bad') {
+    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
+    scheduleChunkedRender('bad', pts.filter(p => Number.isFinite(+p?.lat) && Number.isFinite(+p?.lon)), p => {
+      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
+        .bindPopup(() => `Penalty: ${fmtSig(pen,1)}`)
+        .addTo(layers.bad);
+    }, POINT_RENDER_BATCH);
+  }
 }
 function cityPointKey(){
   if (state.mode !== 'city' || state.pointsView !== 'rank') return '';
@@ -1376,15 +1498,19 @@ function keyBlock(title, items){
 function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
-function drawStressBuckets(b, layer, overlay=false){
+function drawStressBuckets(b, layer, owner='stress'){
+  const items = [];
   [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
-    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
+    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.62 });
   });
+  drawPolylineItemsChunked(owner, items, layer, owner);
 }
-function drawTypeBuckets(b, layer, overlay=false){
+function drawTypeBuckets(b, layer, owner='type'){
+  const items = [];
   [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
-    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
+    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.65 });
   });
+  drawPolylineItemsChunked(owner, items, layer, owner);
 }
 
 function reportedDeviceMemoryGb(){
