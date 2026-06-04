@@ -154,13 +154,14 @@
     </main>
   </div>
 
-  <div id="mobileWarningModal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/85 z-[10000] p-4">
-    <div class="panel w-full max-w-md p-5 shadow-2xl border-yellow-500/60">
-      <div class="text-yellow-300 text-xs font-black uppercase tracking-wide mb-2">Mobile warning</div>
-      <h2 class="text-xl font-black text-white mb-2">This viewer probably will not work well on mobile.</h2>
-      <p class="text-sm text-slate-300 leading-relaxed">The map and analysis files are large, so phones and small tablets may be slow, run out of memory, or display the layout incorrectly. A laptop or desktop browser is strongly recommended.</p>
-      <div class="mt-4 flex justify-end">
-        <button class="btn active" onclick="dismissMobileWarning()">Continue anyway</button>
+  <div id="mobileWarningModal" class="fixed inset-0 hidden items-center justify-center bg-slate-950/90 z-[10000] p-4" role="dialog" aria-modal="true" aria-labelledby="deviceWarningTitle">
+    <div id="deviceWarningPanel" class="panel w-full max-w-md p-5 shadow-2xl border-yellow-500/60">
+      <div id="deviceWarningEyebrow" class="text-yellow-300 text-xs font-black uppercase tracking-wide mb-2">Device warning</div>
+      <h2 id="deviceWarningTitle" class="text-xl font-black text-white mb-2">This viewer may not work well on this device.</h2>
+      <p id="deviceWarningBody" class="text-sm text-slate-300 leading-relaxed"></p>
+      <div id="deviceWarningDetails" class="mt-3 rounded-lg border border-slate-700 bg-slate-950/70 p-3 text-xs text-slate-300 leading-relaxed"></div>
+      <div id="deviceWarningActions" class="mt-4 flex justify-end">
+        <button id="deviceContinueBtn" class="btn active" onclick="dismissMobileWarning()">Continue anyway</button>
       </div>
     </div>
   </div>
@@ -192,7 +193,8 @@ const state = {
   mode:'address', focus:'balanced', addressView:'none', cityAgg:'best', pointsView:'score', tolerance:'25',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
   sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false,
-  sampleLoadingItems:{}, additionalSamplesLocked:false, additionalSamplesLoadedCount:0, lastBikeParkingVisible:undefined
+  sampleLoadingItems:{}, additionalSamplesLocked:false, additionalSamplesLoadedCount:0, lastBikeParkingVisible:undefined,
+  mapInitStarted:false, deviceGate:'unknown'
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -206,13 +208,13 @@ const FALLBACK_EMBEDDED_ANALYSES = [
 
 const SAMPLE_SET_NAME = 'BFI Viewer Beta';
 const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
-const COLUMBUS_ADDRESS_LABEL = '39.984, -83.031 (Grandview Heights, OH)';
+const COLUMBUS_ADDRESS_LABEL = '39.98, -83.03 (Grandview Heights, OH)';
 const SAMPLE_FILE_PATHS = [
   'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
   'sample-files/Helsinki_Finland.viewer-pruned.zip',
   'sample-files/New_York_NY.viewer-pruned.zip',
   'sample-files/Paris_France.viewer-pruned.zip',
-  'sample-files/Copenhagen_Municipality_Denmark.viewer-pruned.zip',
+  'sample-files/Copenhagen_Denmark.viewer-pruned.zip',
   'sample-files/London_United_Kingdom.viewer-pruned.zip',
   'sample-files/Utrecht_Netherlands.viewer-pruned.zip',
   'sample-files/Minneapolis_MN.viewer-pruned.zip',
@@ -299,6 +301,15 @@ function maybeRefreshBikeParkingOverlay(){
 }
 function activeDataset(){ return state.datasets.find(d => d.id === state.currentId) || null; }
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
+function formatCoordinateAddressLabel(value, decimals=4){
+  const raw = String(value || '').trim();
+  const match = raw.match(/^([+-]?\d+(?:\.\d+)?)\s*,\s*([+-]?\d+(?:\.\d+)?)(.*)$/);
+  if (!match) return raw;
+  const lat = Number(match[1]);
+  const lon = Number(match[2]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return raw;
+  return `${lat.toFixed(decimals)}, ${lon.toFixed(decimals)}${match[3] || ''}`;
+}
 function fmtSig(n, sig=1){ return Number.isFinite(+n) ? String(Number((+n).toPrecision(sig))) : '0'; }
 function fmtView(n){
   const x = Number(n);
@@ -356,7 +367,7 @@ function prettifySampleLabel(name){
   let base = raw.split('/').pop() || raw;
   try { base = decodeURIComponent(base); } catch {}
   if (/39\.98404_-83/i.test(base)) return COLUMBUS_ADDRESS_LABEL;
-  if (/Copenhagen_Municipality_Denmark/i.test(base)) return 'Copenhagen, Denmark';
+  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(base)) return 'Copenhagen, Denmark';
   return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
@@ -365,13 +376,19 @@ function prettifySampleLabel(name){
 }
 
 function sampleKey(entry){
-  return String(entry?.name || entry?.url || '').toLowerCase();
+  let raw = String(entry?.name || entry?.url || '').toLowerCase();
+  try { raw = decodeURIComponent(raw); } catch {}
+  return raw.replace(/copenhagen_municipality_denmark\.viewer-pruned\.zip$/i, 'copenhagen_denmark.viewer-pruned.zip');
+}
+
+function isLegacyCopenhagenEntry(entry){
+  return /Copenhagen_Municipality_Denmark/i.test(String(entry?.name || entry?.url || ''));
 }
 
 function sampleLabel(entry){
   const raw = String(entry?.name || entry?.url || entry?.label || '');
   if (/39\.98404_-83/i.test(raw)) return COLUMBUS_ADDRESS_LABEL;
-  if (/Copenhagen_Municipality_Denmark/i.test(raw)) return 'Copenhagen, Denmark';
+  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(raw)) return 'Copenhagen, Denmark';
   return entry?.label || prettifySampleLabel(entry?.name || entry?.url || 'sample');
 }
 
@@ -381,8 +398,14 @@ function addSampleEntries(target, entries){
     if (!entry) continue;
     const key = sampleKey(entry);
     if (!key) continue;
-    if (!target.has(key)) target.set(key, entry);
-    else if (entry.label && !target.get(key).label) target.get(key).label = entry.label;
+    if (!target.has(key)) {
+      target.set(key, entry);
+    } else {
+      const existing = target.get(key);
+      // Prefer the current Copenhagen filename over a stale manifest entry using the old Municipality name.
+      if (isLegacyCopenhagenEntry(existing) && !isLegacyCopenhagenEntry(entry)) target.set(key, entry);
+      else if (entry.label && !existing.label) existing.label = entry.label;
+    }
   }
 }
 
@@ -541,14 +564,17 @@ async function loadSelectedSamplesFromPicker(){
   const remainingSlots = Math.max(0, 2 - (state.additionalSamplesLoadedCount || 0));
   const keys = selectedSampleKeys().slice(0, remainingSlots);
   if (!keys.length || state.sampleLoading) return;
-  const added = await loadSelectedSampleEntries(keys);
-  if (added > 0) {
-    state.additionalSamplesLoadedCount = Math.min(2, (state.additionalSamplesLoadedCount || 0) + Math.min(added, keys.length));
-  }
-  renderSamplePickerList();
-  updateSamplePickerControls();
-  populateSamplePrioritySelect();
+
+  // Snapshot the checked samples and close the picker before any large file begins loading.
   closeSamplePicker();
+  await nextPaint();
+
+  const result = await loadSelectedSampleEntries(keys);
+  if (result.loadedSamples > 0) {
+    state.additionalSamplesLoadedCount = Math.min(2, (state.additionalSamplesLoadedCount || 0) + result.loadedSamples);
+  }
+  if (state.additionalSamplesLoadedCount >= 2) state.additionalSamplesLocked = true;
+  populateSamplePrioritySelect();
 }
 
 function setLoadingSampleButton(key, label, phase = 'Queued', pct = 0){
@@ -572,48 +598,61 @@ function phaseProgress(phase){
 }
 
 async function loadSelectedSampleEntries(keys){
-  if (!window.JSZip) { updateFileSummary(); setSampleStatus('JSZip is unavailable, so hosted samples cannot load.', 0, 0); return 0; }
-  const uniqueKeys = [...new Set(keys || [])].filter(key => key && !state.sampleLoadedKeys.has(key)).slice(0, 2);
-  if (!uniqueKeys.length) return 0;
+  if (!window.JSZip) {
+    updateFileSummary();
+    setSampleStatus('JSZip is unavailable, so hosted samples cannot load.', 0, 0);
+    return { added:0, loadedSamples:0, processedSamples:0 };
+  }
 
-  state.sampleLoading = true;
-  uniqueKeys.forEach(key => {
-    const entry = state.sampleEntries.find(e => sampleKey(e) === key);
-    if (entry) setLoadingSampleButton(key, sampleLabel(entry), 'Queued', 5);
-  });
-  populateSamplePrioritySelect();
-  let added = 0;
-  let loadedFiles = 0;
-  const total = uniqueKeys.length;
-
-  for (const key of uniqueKeys) {
+  // Resolve entries once, before rendering or loading can mutate the picker DOM or sample list.
+  const selectedEntries = [];
+  const seen = new Set();
+  for (const key of keys || []) {
+    if (!key || seen.has(key) || state.sampleLoadedKeys.has(key)) continue;
     const entry = state.sampleEntries.find(e => sampleKey(e) === key);
     if (!entry) continue;
+    seen.add(key);
+    selectedEntries.push({ key, entry });
+    if (selectedEntries.length >= 2) break;
+  }
+  if (!selectedEntries.length) return { added:0, loadedSamples:0, processedSamples:0 };
+
+  state.sampleLoading = true;
+  selectedEntries.forEach(({ key, entry }) => setLoadingSampleButton(key, sampleLabel(entry), 'Queued', 5));
+  populateSamplePrioritySelect();
+  let added = 0;
+  let loadedSamples = 0;
+  let processedSamples = 0;
+  const total = selectedEntries.length;
+
+  for (const { key, entry } of selectedEntries) {
     const label = sampleLabel(entry);
     try {
       setLoadingSampleButton(key, label, 'Fetching zip', 20);
-      setSampleStatus(`Loading ${label}...`, loadedFiles, total);
+      setSampleStatus(`Loading ${label}...`, processedSamples, total);
       const result = await loadZipAnalysisFromUrl(entry, phase => {
         setLoadingSampleButton(key, label, phase, phaseProgress(phase));
-        setSampleStatus(`Loading ${label}: ${phase}...`, loadedFiles, total);
+        setSampleStatus(`Loading ${label}: ${phase}...`, processedSamples, total);
       });
+      if (!result.added) throw new Error('No valid .bfiana/.json analysis files found in zip.');
       setLoadingSampleButton(key, label, 'Loaded', 100);
       state.sampleLoadedKeys.add(key);
-      loadedFiles += 1;
+      processedSamples += 1;
+      loadedSamples += 1;
       added += result.added;
       showNewDataset(result.lastItem);
       clearLoadingSampleButton(key);
-      setSampleStatus(`Loaded ${label}.`, loadedFiles, total);
+      setSampleStatus(`Loaded ${label}.`, processedSamples, total);
     } catch (err) {
       setLoadingSampleButton(key, label, 'Failed', 100);
       state.sampleLoadedKeys.add(key);
-      loadedFiles += 1;
+      processedSamples += 1;
       const msg = `${label}: ${err.message || err}`;
       state.sampleErrors.push(msg);
       console.warn(`Could not load ${SAMPLE_SET_NAME} file:`, entry.url, err);
       await nextPaint();
       clearLoadingSampleButton(key);
-      setSampleStatus(`Skipped ${label}; continuing...`, loadedFiles, total);
+      setSampleStatus(`Skipped ${label}; continuing...`, processedSamples, total);
     }
     await nextPaint();
   }
@@ -623,11 +662,11 @@ async function loadSelectedSampleEntries(keys){
   rebuildSelect();
   populateSamplePrioritySelect();
   setSampleStatus(
-    added ? `Loaded ${added} selected hosted analysis file(s).` : 'No selected hosted analysis files loaded.',
-    loadedFiles,
+    loadedSamples ? `Loaded ${loadedSamples} selected hosted sample(s).` : 'No selected hosted samples loaded.',
+    processedSamples,
     total
   );
-  return added;
+  return { added, loadedSamples, processedSamples };
 }
 
 function setSampleStatus(message, done = null, total = null){
@@ -844,7 +883,8 @@ async function ingestText(text, name, options = {}){
     const data = JSON.parse(text);
     if (data.type === 'raw_osm_cache') return null;
     const kind = data.appMode === 'city' || data.lastCityRawResults ? 'city' : 'address';
-    const label = kind === 'city' ? (data.cityInput || data.cityMetadata?.city || name) : (data.addressInput || name);
+    const rawLabel = kind === 'city' ? (data.cityInput || data.cityMetadata?.city || name) : (data.addressInput || name);
+    const label = kind === 'address' && !options.label ? formatCoordinateAddressLabel(rawLabel, 4) : rawLabel;
     const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const item = { id, name, label: options.label || label, kind, data, embedded: !!options.embedded, sample: !!options.sample, sampleGroup: options.sampleGroup || null };
     state.datasets.push(item);
@@ -1347,24 +1387,83 @@ function drawTypeBuckets(b, layer, overlay=false){
   });
 }
 
-function isLikelyMobileDevice(){
-  return window.matchMedia('(max-width: 768px)').matches || (navigator.maxTouchPoints > 0 && window.innerWidth < 900);
+function reportedDeviceMemoryGb(){
+  const memory = Number(navigator.deviceMemory);
+  return Number.isFinite(memory) && memory > 0 ? memory : null;
+}
+function assessDeviceSupport(){
+  const width = Math.round(window.innerWidth || document.documentElement.clientWidth || screen.width || 0);
+  const memory = reportedDeviceMemoryGb();
+  const blockReasons = [];
+  const warningReasons = [];
+
+  if (width < 600) blockReasons.push(`window width is ${width}px; at least 600px is required`);
+  else if (width < 1000) warningReasons.push(`window width is ${width}px; 1000px or wider is recommended`);
+
+  if (memory !== null && memory < 8) blockReasons.push(`browser-reported RAM is ${memory} GB; at least 8 GB is required`);
+  else if (memory !== null && memory < 12) warningReasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
+
+  return {
+    level: blockReasons.length ? 'block' : (warningReasons.length ? 'warn' : 'ok'),
+    width,
+    memory,
+    reasons: blockReasons.length ? blockReasons : warningReasons
+  };
+}
+function startViewerOnce(){
+  if (state.mapInitStarted) return;
+  state.mapInitStarted = true;
+  initMap();
 }
 function showMobileWarningIfNeeded(){
   const modal = document.getElementById('mobileWarningModal');
-  if (!modal || !isLikelyMobileDevice()) return;
+  if (!modal) return false;
+  const assessment = assessDeviceSupport();
+  state.deviceGate = assessment.level;
+  if (assessment.level === 'ok') return false;
+
+  const panel = document.getElementById('deviceWarningPanel');
+  const eyebrow = document.getElementById('deviceWarningEyebrow');
+  const title = document.getElementById('deviceWarningTitle');
+  const body = document.getElementById('deviceWarningBody');
+  const details = document.getElementById('deviceWarningDetails');
+  const actions = document.getElementById('deviceWarningActions');
+  const memoryText = assessment.memory === null ? 'not reported by this browser' : `${assessment.memory} GB`;
+
+  if (assessment.level === 'block') {
+    panel?.classList.remove('border-yellow-500/60');
+    panel?.classList.add('border-red-500/60');
+    if (eyebrow) { eyebrow.textContent = 'Device not supported'; eyebrow.className = 'text-red-300 text-xs font-black uppercase tracking-wide mb-2'; }
+    if (title) title.textContent = 'This viewer cannot run on this device.';
+    if (body) body.textContent = 'The viewer needs a window at least 600px wide and at least 8 GB of browser-reported RAM. Switch to a computer with more width or RAM.';
+    actions?.classList.add('hidden');
+  } else {
+    if (eyebrow) { eyebrow.textContent = 'Device warning'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
+    if (title) title.textContent = 'This viewer may be slow or unstable on this device.';
+    if (body) body.textContent = 'The viewer works best with a window at least 1000px wide and at least 12 GB of browser-reported RAM. Switching to a computer is recommended, but you can continue anyway.';
+    actions?.classList.remove('hidden');
+  }
+
+  if (details) {
+    const reasonItems = assessment.reasons.map(reason => `<li>${escapeHtml(reason)}</li>`).join('');
+    details.innerHTML = `<div><span class="text-slate-500">Detected width:</span> ${assessment.width}px</div><div><span class="text-slate-500">Detected RAM:</span> ${escapeHtml(memoryText)}</div><ul class="mt-2 list-disc pl-5 text-slate-400">${reasonItems}</ul>`;
+  }
   modal.classList.remove('hidden');
   modal.classList.add('flex');
+  return true;
 }
 function dismissMobileWarning(){
+  if (state.deviceGate !== 'warn') return;
   const modal = document.getElementById('mobileWarningModal');
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
+  state.deviceGate = 'ok';
+  startViewerOnce();
 }
 window.addEventListener('load', () => {
-  showMobileWarningIfNeeded();
-  initMap();
+  const gateShown = showMobileWarningIfNeeded();
+  if (!gateShown) startViewerOnce();
 });
 </script>
 </body>
