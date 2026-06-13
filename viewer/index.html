@@ -282,7 +282,7 @@ let viewportRenderToken = 0;
 const spatialIndexes = new WeakMap();
 const spatialIndexBuilds = new WeakMap();
 const MAP_MIN_ZOOM_DEFAULT = 4;
-const MAP_MIN_ZOOM_CITY = 12;
+const MAP_MIN_ZOOM_CITY = 11;
 const MAP_MIN_ZOOM_ADDRESS = 11;
 
 function currentMapMinZoom(){
@@ -538,8 +538,8 @@ function visibleLineCap(kind, bucket=''){
 }
 function pointCap(kind){
   const z = map?.getZoom?.() || 10;
-  if (kind === 'dest') return z < 12 ? 1800 : z < 13 ? 4200 : z < 14 ? 8000 : z < 15 ? 14000 : 22000;
-  return z < 12 ? 2500 : z < 13 ? 6000 : z < 14 ? 12000 : 22000;
+  if (kind === 'dest') return z < 12 ? 15000 : z < 13 ? 30000 : z < 14 ? 50000 : 80000;
+  return z < 12 ? 20000 : z < 13 ? 40000 : z < 14 ? 65000 : 100000;
 }
 function minZoomForTypeBucket(bucket){
   if (bucket === 'crossings') return 13;
@@ -1667,6 +1667,8 @@ function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
   if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
   if (name === 'type' && state.overlays.type) state.overlays.stress = false;
+  if (name === 'dest' && state.overlays.dest) state.overlays.bad = false;
+  if (name === 'bad' && state.overlays.bad) state.overlays.dest = false;
   ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
   renderOverlaysOnly();
 }
