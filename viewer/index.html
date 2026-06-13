@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Optimized v11</title>
+  <title>BFI Viewer Beta Optimized v12</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,6 +18,9 @@
     .btn.warn.active { background:#dc2626; border-color:#f87171; }
     .btn.orange.active { background:#d97706; border-color:#fbbf24; }
     .btn.purple.active { background:#9333ea; border-color:#c084fc; }
+
+    .btn.limited-feature { opacity:.45; filter:grayscale(.55); border-style:dashed; }
+    .btn.limited-feature:hover { background:#334155; color:#cbd5e1; }
     .label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; font-weight:900; }
     .stat { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:10px; text-align:center; }
     .stat .v { color:white; font-size:24px; line-height:1; font-weight:1000; }
@@ -238,7 +241,7 @@ const state = {
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
   sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false,
   sampleLoadingItems:{}, additionalSamplesLocked:false, additionalSamplesLoadedCount:0, lastBikeParkingVisible:undefined,
-  mapInitStarted:false, deviceGate:'unknown'
+  mapInitStarted:false, deviceGate:'unknown', deviceLimited:false
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -279,7 +282,7 @@ let viewportRenderToken = 0;
 const spatialIndexes = new WeakMap();
 const spatialIndexBuilds = new WeakMap();
 const MAP_MIN_ZOOM_DEFAULT = 4;
-const MAP_MIN_ZOOM_CITY = 11;
+const MAP_MIN_ZOOM_CITY = 12;
 const MAP_MIN_ZOOM_ADDRESS = 11;
 
 function currentMapMinZoom(){
@@ -491,35 +494,52 @@ function sampleItems(items, cap){
   for (let i = 0; i < cap; i++) out.push(items[Math.floor(i * step)]);
   return out;
 }
+function capMultiplierForBucket(kind, bucket=''){
+  if (kind === 'type') {
+    if (bucket === 'paths' || bucket === 'lanes') return 1.55;
+    if (bucket === 'friendly') return 1.25;
+    if (bucket === 'roads') return 0.70;
+    if (bucket === 'others') return 0.55;
+    if (bucket === 'walking' || bucket === 'services' || bucket === 'crossings') return 0.45;
+  }
+  if (kind === 'stress') {
+    if (bucket === 'low') return 1.45;
+    if (bucket === 'med') return 1.20;
+    if (bucket === 'high') return 0.75;
+    if (bucket === 'extreme') return 0.62;
+    if (bucket === 'critical') return 0.55;
+    if (bucket === 'gray') return 0.45;
+  }
+  return 1;
+}
+function prioritySampleItems(items, cap, scoreFn){
+  if (!items || !items.length) return [];
+  if (!cap || !Number.isFinite(cap) || items.length <= cap) return items;
+  return [...items].sort((a,b)=>(scoreFn(b)||0)-(scoreFn(a)||0)).slice(0, cap);
+}
 function visibleLineCap(kind, bucket=''){
   const z = map?.getZoom?.() || 11;
-  const lightDetail = ['walking','services','crossings','gray'].includes(bucket);
 
-  // Address optimized v2 stores exact segment endpoints, but the viewer can still make them look ugly
-  // if it samples too hard at low zoom. These caps are intentionally less aggressive so linework
-  // stays coherent; the zoom floor handles the worst far-zoom cases.
-  if (kind === 'addressRoutes') {
-    return z < 12 ? 160000 : z < 13 ? 260000 : z < 14 ? 420000 : z < 15 ? 650000 : 900000;
-  }
-  if (kind === 'addressGradient') {
-    return z < 12 ? 220000 : z < 13 ? 360000 : z < 14 ? 560000 : z < 15 ? 800000 : 1100000;
+  // Final address-mode pass: do not sample/cap address linework at allowed zooms.
+  // If an address v2 file still misses lines after this, the missing geometry is in the data/converter, not the renderer.
+  if (kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'))) {
+    return Infinity;
   }
 
-  // City overlays are now restricted one zoom level farther in, so we can afford less aggressive
-  // detail capping and avoid the sparse/dashed look when zoomed out.
+  let base;
   if (kind === 'stress') {
-    return z < 12 ? 85000 : z < 13 ? 140000 : z < 14 ? 230000 : z < 15 ? 360000 : 520000;
+    base = z < 13 ? 130000 : z < 14 ? 230000 : z < 15 ? 380000 : z < 16 ? 560000 : 760000;
+  } else if (kind === 'type') {
+    base = z < 13 ? 125000 : z < 14 ? 220000 : z < 15 ? 360000 : z < 16 ? 540000 : 740000;
+  } else {
+    base = z < 13 ? 65000 : z < 14 ? 140000 : z < 15 ? 260000 : 420000;
   }
-  if (kind === 'type') {
-    const base = z < 12 ? 80000 : z < 13 ? 140000 : z < 14 ? 230000 : z < 15 ? 360000 : 520000;
-    return lightDetail ? Math.floor(base * 0.65) : base;
-  }
-  return z < 12 ? 30000 : z < 13 ? 80000 : z < 14 ? 160000 : 260000;
+  return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
 }
 function pointCap(kind){
   const z = map?.getZoom?.() || 10;
-  if (kind === 'dest') return z < 11 ? 700 : z < 12 ? 1400 : z < 13 ? 3000 : z < 14 ? 6000 : 12000;
-  return z < 11 ? 1000 : z < 13 ? 4000 : 12000;
+  if (kind === 'dest') return z < 12 ? 1800 : z < 13 ? 4200 : z < 14 ? 8000 : z < 15 ? 14000 : 22000;
+  return z < 12 ? 2500 : z < 13 ? 6000 : z < 14 ? 12000 : 22000;
 }
 function minZoomForTypeBucket(bucket){
   if (bucket === 'crossings') return 13;
@@ -652,7 +672,7 @@ function optimizedPairsForStress(store, bucket){
 }
 async function drawOptimizedTypeBucketsAsync(store, layer, overlay, token, notes){
   if (!validOptimizedCityLines(store)) return;
-  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const defs = [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]];
   const z = map?.getZoom?.() || 10;
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
@@ -667,7 +687,7 @@ async function drawOptimizedTypeBucketsAsync(store, layer, overlay, token, notes
 }
 async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, notes){
   if (!validOptimizedCityLines(store)) return;
-  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  const defs = [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]];
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
     const pairs = optimizedPairsForStress(store, k);
@@ -720,7 +740,7 @@ function addressRouteBucketWeight(bucket){
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
   if (!idx) return [];
-  const b = paddedMapBounds();
+  const b = paddedMapBounds(1.0);
   const cs = idx.cellDegrees || SPATIAL_INDEX_CELL_DEG;
   const minX = Math.floor(b.south / cs), maxX = Math.floor(b.north / cs);
   const minY = Math.floor(b.west / cs), maxY = Math.floor(b.east / cs);
@@ -738,7 +758,7 @@ function collectOptimizedAddressGroups(store, mode, notes){
   const cells = queryAddressGridCells(store);
   const scale = Number(store.scale) || 10000000;
   const capKind = mode === 'gradient' ? 'addressGradient' : mode === 'routes' ? 'addressRoutes' : mode;
-  const cap = visibleLineCap(capKind, '');
+  const cap = Infinity;
   const refs = [];
   let total = 0;
   const z = map?.getZoom?.() || 10;
@@ -806,7 +826,7 @@ async function drawOptimizedAddressTypeBucketsAsync(store, layer, overlay, token
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'type', notes);
   const defs = { paths:['#16a34a',1.7], lanes:['#2563eb',1.7], friendly:['#ffee58',1.4], roads:['#ef4444',1], others:['#b38804',1], walking:['#9ca3af',.35], services:['#4b5563',.35], crossings:['#22d3ee',.8] };
-  const order = ['paths','lanes','friendly','roads','others','walking','services','crossings'];
+  const order = ['others','roads','services','walking','crossings','friendly','lanes','paths'];
   for (const bucket of order) {
     if (token !== viewportRenderToken) return;
     const code = store.typeBuckets?.indexOf(bucket);
@@ -821,7 +841,7 @@ async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, tok
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'stress', notes);
   const defs = { low:['#2da15f',1], med:['#b3bf43',1], high:['#b07317',1], extreme:['#b04848',1], critical:['#610909',1], gray:['#4b5563',.35] };
-  for (const bucket of ['low','med','high','extreme','critical','gray']) {
+  for (const bucket of ['gray','critical','extreme','high','med','low']) {
     if (token !== viewportRenderToken) return;
     const code = store.stressBuckets?.indexOf(bucket);
     const lines = result.groups.get(code);
@@ -1629,6 +1649,7 @@ function setFocus(f){
   else scheduleRender(80);
 }
 function setAddressView(v){
+  if (v !== 'none' && gatedLimitedFeature()) return;
   state.addressView=v;
   ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
   renderViewportDependentLayers();
@@ -1642,6 +1663,7 @@ function setTolerance(v){
   toleranceTimer = setTimeout(render, 220);
 }
 function toggleOverlay(name){
+  if (gatedLimitedFeature()) return;
   state.overlays[name]=!state.overlays[name];
   if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
   if (name === 'type' && state.overlays.type) state.overlays.stress = false;
@@ -1947,6 +1969,12 @@ function cityRankDisclaimer(data){
   return noteBlock('Ranking note', `Because ${Math.round(100 * best / scores.length)}% of calculated points are within a 5 point range, treat these rankings with a grain of salt.`);
 }
 
+
+function largeCityWarning(showZoomDetail=false){
+  const suffix = showZoomDetail ? ' <b>Zoom in for more detail.</b>' : '';
+  return noteBlock('Large city warning', `Please be patient when panning/zoom. To help with performance, detail is reduced when zoomed out.${suffix}`);
+}
+
 async function renderViewportDependentLayers(){
   const token = ++viewportRenderToken;
   clearViewportDynamicLayers();
@@ -1955,16 +1983,16 @@ async function renderViewportDependentLayers(){
   const data = ds.data;
   const m = currentMetrics();
   const keys = [];
+  const warnings = [];
   const notes = { capped:false, hiddenDetail:false };
   const pointKey = cityPointKey();
   if (pointKey) keys.push(pointKey);
   const rankNote = cityRankDisclaimer(data);
-  if (rankNote) keys.push(rankNote);
+  if (rankNote) warnings.push(rankNote);
   if (hasViewportDependentLayers()) {
-    keys.push(noteBlock('Performance mode', 'Large line and point layers are drawn near the current map view, with reduced detail when zoomed far out. Pan or zoom, then pause briefly to refresh nearby detail.'));
-    document.getElementById('legend').innerHTML = keys.join('') + noteBlock('Rendering', 'Updating visible map detail…');
+    document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
   } else {
-    document.getElementById('legend').innerHTML = keys.join('');
+    document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
   }
 
   if (ds.kind === 'address' && m) {
@@ -1981,11 +2009,9 @@ async function renderViewportDependentLayers(){
 
   await drawOverlaysAsync(data, m, token, keys, notes);
   if (token !== viewportRenderToken) return;
-  if (notes.hiddenDetail) keys.push(noteBlock('Low-priority detail hidden', 'Walking, service, crossings, or very dense points are held back until you zoom in more.'));
-  if (notes.capped) keys.push(noteBlock('Detail capped', 'Some dense layers are sampled at this zoom level. Zoom in for more complete detail.'));
-  document.getElementById('legend').innerHTML = keys.join('');
+  if (hasViewportDependentLayers()) warnings.push(largeCityWarning(notes.capped || notes.hiddenDetail));
+  document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
 }
-
 async function drawOverlaysAsync(data, m, token, keys, notes){
   const optimizedCityLines = validOptimizedCityLines(data.cityLineSegments) ? data.cityLineSegments : null;
   const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
@@ -2015,14 +2041,18 @@ function drawDestinationsOverlay(data, m, keys, notes){
   const rawPois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
   const bounds = paddedMapBounds();
   const bikeParkingVisible = shouldDrawBikeParking();
-  let bikeParkingHidden = 0;
   const visible = [];
   rawPois.forEach(p => {
     const isBikeParking = isBikeParkingPoi(p);
-    if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
+    if (isBikeParking && !bikeParkingVisible) return;
     if (pointLikeInBounds(p, bounds)) visible.push(p);
   });
-  const selected = sampleItems(visible, pointCap('dest'));
+  const cap = pointCap('dest');
+  const selected = prioritySampleItems(visible, cap, p => {
+    const w = Number(p?.weight) || 1;
+    const bikePenalty = isBikeParkingPoi(p) ? -100 : 0;
+    return bikePenalty + (w >= 3 ? 50 : w === 2 ? 35 : w === .25 ? 5 : 20);
+  });
   if (visible.length > selected.length) notes.capped = true;
   selected.forEach(p => {
     const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
@@ -2030,14 +2060,16 @@ function drawDestinationsOverlay(data, m, keys, notes){
       .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
       .addTo(layers.dest);
   });
-  if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
   keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
 }
 function drawBadOverlay(data, m, keys, notes){
   const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
   const bounds = paddedMapBounds();
   const visible = pts.filter(p => pointLikeInBounds(p, bounds));
-  const selected = sampleItems(visible, pointCap('bad'));
+  const selected = prioritySampleItems(visible, pointCap('bad'), p => {
+    const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+    return Number(pen) || 0;
+  });
   if (visible.length > selected.length) notes.capped = true;
   selected.forEach(p => {
     const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
@@ -2061,19 +2093,19 @@ function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
 async function drawStressBucketsAsync(b, layer, overlay, token, notes){
-  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  const defs = [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]];
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
     if(b[k]?.length) await drawLineBucketAsync(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay, token, 'stress', k, notes);
   }
 }
 function drawStressBuckets(b, layer, overlay=false){
-  [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
+  [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
   });
 }
 async function drawTypeBucketsAsync(b, layer, overlay, token, notes){
-  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const defs = [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]];
   const z = map?.getZoom?.() || 10;
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
@@ -2082,7 +2114,7 @@ async function drawTypeBucketsAsync(b, layer, overlay, token, notes){
   }
 }
 function drawTypeBuckets(b, layer, overlay=false){
-  [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
+  [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
   });
 }
@@ -2094,33 +2126,39 @@ function reportedDeviceMemoryGb(){
 function assessDeviceSupport(){
   const width = Math.round(window.innerWidth || document.documentElement.clientWidth || screen.width || 0);
   const memory = reportedDeviceMemoryGb();
-  const blockReasons = [];
-  const warningReasons = [];
+  const reasons = [];
 
-  if (width < 700) blockReasons.push(`window width is ${width}px; at least 700px is required`);
-  else if (width < 1000) warningReasons.push(`window width is ${width}px; 1000px or wider is recommended`);
-
-  if (memory !== null && memory < 8) blockReasons.push(`browser-reported RAM is ${memory} GB; at least 8 GB is required`);
-  else if (memory !== null && memory < 12) warningReasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
+  if (width < 1000) reasons.push(`window width is ${width}px; 1000px or wider is recommended`);
+  if (memory !== null && memory < 12) reasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
 
   return {
-    level: blockReasons.length ? 'block' : (warningReasons.length ? 'warn' : 'ok'),
+    level: reasons.length ? 'limited' : 'ok',
     width,
     memory,
-    reasons: blockReasons.length ? blockReasons : warningReasons
+    reasons
   };
+}
+function updateLimitedFeatureButtons(){
+  const limited = !!state.deviceLimited;
+  ['view-gradient','view-routes','ov-type','ov-stress','ov-dest','ov-bad'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('limited-feature', limited);
+  });
 }
 function startViewerOnce(){
   if (state.mapInitStarted) return;
   state.mapInitStarted = true;
   initMap();
 }
-function showMobileWarningIfNeeded(){
+function showMobileWarningIfNeeded(options={}){
   const modal = document.getElementById('mobileWarningModal');
   if (!modal) return false;
   const assessment = assessDeviceSupport();
-  state.deviceGate = assessment.level;
-  if (assessment.level === 'ok') return false;
+  const manual = !!options.manual;
+  const limited = assessment.level === 'limited' || state.deviceLimited;
+  state.deviceLimited = limited;
+  state.deviceGate = limited ? 'limited' : 'ok';
+  updateLimitedFeatureButtons();
+  if (!limited && !manual) return false;
 
   const panel = document.getElementById('deviceWarningPanel');
   const eyebrow = document.getElementById('deviceWarningEyebrow');
@@ -2129,39 +2167,32 @@ function showMobileWarningIfNeeded(){
   const details = document.getElementById('deviceWarningDetails');
   const actions = document.getElementById('deviceWarningActions');
 
+  panel?.classList.remove('border-red-500/60');
+  panel?.classList.add('border-yellow-500/60');
+  if (eyebrow) { eyebrow.textContent = 'Computer recommended'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
+  if (title) title.textContent = 'More features are available on a computer.';
+  if (body) body.textContent = 'This viewer works best on a computer with a wide screen and plenty of memory. If you are already on a computer, widen your browser window. On this device, heavy address map modes and overlays are disabled to keep the basic viewer usable.';
   if (details) {
-    details.innerHTML = '';
-    details.classList.add('hidden');
+    details.innerHTML = assessment.reasons?.length ? assessment.reasons.map(escapeHtml).join('<br>') : 'Use a computer or wider screen for overlays, address routes, address gradients, and dense analysis layers.';
+    details.classList.remove('hidden');
   }
-
-  if (assessment.level === 'block') {
-    panel?.classList.remove('border-yellow-500/60');
-    panel?.classList.add('border-red-500/60');
-    if (eyebrow) { eyebrow.textContent = 'Not Supported'; eyebrow.className = 'text-red-300 text-xs font-black uppercase tracking-wide mb-2'; }
-    if (title) title.textContent = 'This viewer cannot currently run in this browser.';
-    if (body) body.textContent = 'The viewer needs a window at least 700px wide, and at least 8 GB of RAM on your device due to the large size of the analysis files. Try switching to a computer or widening your browser window.';
-    actions?.classList.add('hidden');
-  } else {
-    panel?.classList.remove('border-red-500/60');
-    panel?.classList.add('border-yellow-500/60');
-    if (eyebrow) { eyebrow.textContent = 'Warning'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
-    if (title) title.textContent = 'This viewer may be hard to use, slow, or unstable for you.';
-    if (body) body.textContent = 'The viewer works best with a window at least 1000px wide, and at least 12 GB of RAM on your device. Use a computer or widen your window if possible.';
-    actions?.classList.remove('hidden');
-  }
+  actions?.classList.remove('hidden');
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
   return true;
 }
 function dismissMobileWarning(){
-  if (state.deviceGate !== 'warn') return;
   const modal = document.getElementById('mobileWarningModal');
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
-  state.deviceGate = 'ok';
   startViewerOnce();
+}
+function gatedLimitedFeature(){
+  if (!state.deviceLimited) return false;
+  showMobileWarningIfNeeded({ manual:true });
+  return true;
 }
 window.addEventListener('load', () => {
   const gateShown = showMobileWarningIfNeeded();
