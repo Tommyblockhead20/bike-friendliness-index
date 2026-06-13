@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Optimized v9</title>
+  <title>BFI Viewer Beta Optimized v11</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -43,6 +43,48 @@
     .popup-stack { display:grid; gap:2px; }
     .popup-stack div { display:flex; justify-content:space-between; gap:14px; }
     .popup-stack span:first-child { color:#475569; font-weight:900; }
+
+
+    /* Basic touchscreen scrolling support. Desktop stays fixed; touch/narrow layouts can scroll the UI. */
+    aside section.panel,
+    #samplePickerList,
+    #deviceWarningPanel,
+    .overflow-y-auto {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+    }
+    @media (pointer: coarse), (max-width: 900px) {
+      body {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+      body > .h-full,
+      .h-screen {
+        height: auto !important;
+        min-height: 100vh !important;
+      }
+      main.flex {
+        flex-direction: column !important;
+        overflow: visible !important;
+      }
+      aside {
+        width: 100% !important;
+        min-height: auto !important;
+      }
+      aside section.panel {
+        max-height: 46vh;
+        overflow-y: auto !important;
+      }
+      section.grow {
+        min-height: 70vh;
+      }
+      #map {
+        min-height: 62vh;
+      }
+    }
   </style>
 </head>
 <body class="h-screen p-4 overflow-hidden">
@@ -237,7 +279,7 @@ let viewportRenderToken = 0;
 const spatialIndexes = new WeakMap();
 const spatialIndexBuilds = new WeakMap();
 const MAP_MIN_ZOOM_DEFAULT = 4;
-const MAP_MIN_ZOOM_CITY = 10;
+const MAP_MIN_ZOOM_CITY = 11;
 const MAP_MIN_ZOOM_ADDRESS = 11;
 
 function currentMapMinZoom(){
@@ -450,16 +492,29 @@ function sampleItems(items, cap){
   return out;
 }
 function visibleLineCap(kind, bucket=''){
-  const z = map?.getZoom?.() || 10;
+  const z = map?.getZoom?.() || 11;
   const lightDetail = ['walking','services','crossings','gray'].includes(bucket);
-  if (kind === 'addressRoutes') return z < 11 ? 5000 : z < 12 ? 12000 : z < 13 ? 28000 : z < 14 ? 55000 : 90000;
-  if (kind === 'addressGradient') return z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 40000 : z < 13 ? 80000 : z < 14 ? 150000 : 240000;
-  if (kind === 'stress') return z < 10 ? 9000 : z < 11 ? 20000 : z < 12 ? 45000 : z < 13 ? 90000 : z < 14 ? 160000 : 260000;
-  if (kind === 'type') {
-    const base = z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 42000 : z < 13 ? 85000 : z < 14 ? 150000 : 240000;
-    return lightDetail ? Math.floor(base * 0.45) : base;
+
+  // Address optimized v2 stores exact segment endpoints, but the viewer can still make them look ugly
+  // if it samples too hard at low zoom. These caps are intentionally less aggressive so linework
+  // stays coherent; the zoom floor handles the worst far-zoom cases.
+  if (kind === 'addressRoutes') {
+    return z < 12 ? 160000 : z < 13 ? 260000 : z < 14 ? 420000 : z < 15 ? 650000 : 900000;
   }
-  return z < 11 ? 10000 : z < 13 ? 40000 : 120000;
+  if (kind === 'addressGradient') {
+    return z < 12 ? 220000 : z < 13 ? 360000 : z < 14 ? 560000 : z < 15 ? 800000 : 1100000;
+  }
+
+  // City overlays are now restricted one zoom level farther in, so we can afford less aggressive
+  // detail capping and avoid the sparse/dashed look when zoomed out.
+  if (kind === 'stress') {
+    return z < 12 ? 85000 : z < 13 ? 140000 : z < 14 ? 230000 : z < 15 ? 360000 : 520000;
+  }
+  if (kind === 'type') {
+    const base = z < 12 ? 80000 : z < 13 ? 140000 : z < 14 ? 230000 : z < 15 ? 360000 : 520000;
+    return lightDetail ? Math.floor(base * 0.65) : base;
+  }
+  return z < 12 ? 30000 : z < 13 ? 80000 : z < 14 ? 160000 : 260000;
 }
 function pointCap(kind){
   const z = map?.getZoom?.() || 10;
@@ -469,7 +524,7 @@ function pointCap(kind){
 function minZoomForTypeBucket(bucket){
   if (bucket === 'crossings') return 13;
   if (bucket === 'walking' || bucket === 'services') return 12;
-  if (bucket === 'others') return 10;
+  if (bucket === 'others') return 11;
   return 0;
 }
 async function visibleItemsForLines(items, token, kind, bucket='', getLine=itemLine){
@@ -651,12 +706,16 @@ function unpackTolNibble(pack, tolIdx){
   return v ? v - 1 : -1;
 }
 function addressRouteBucketWeight(bucket){
-  if (bucket < 2) return 1;
-  if (bucket < 4) return 1.6;
-  if (bucket < 7) return 2.4;
-  if (bucket < 10) return 3.5;
-  if (bucket < 13) return 4.8;
-  return 6;
+  let base;
+  if (bucket < 2) base = 1;
+  else if (bucket < 4) base = 1.6;
+  else if (bucket < 7) base = 2.4;
+  else if (bucket < 10) base = 3.5;
+  else if (bucket < 13) base = 4.8;
+  else base = 6;
+  const z = map?.getZoom?.() || 12;
+  const zoomScale = z <= 11 ? 0.58 : z < 13 ? 0.78 : z < 14 ? 0.9 : 1;
+  return Math.max(0.85, base * zoomScale);
 }
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
