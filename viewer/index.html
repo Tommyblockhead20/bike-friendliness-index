@@ -369,7 +369,7 @@ function applyMapZoomFloor({ clamp=true } = {}){
 async function initMap(){
   map = L.map('map', { zoomControl:true, preferCanvas:true, minZoom:MAP_MIN_ZOOM_DEFAULT }).setView([39.8283,-98.5795], 4);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
-  ['range','boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
+  ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => {
     clearTimeout(zoomRenderTimer);
     zoomRenderTimer = setTimeout(() => {
@@ -597,25 +597,27 @@ function visibleLineCap(kind, bucket=''){
   const z = map?.getZoom?.() || 11;
   if (state.detailOverride) return Infinity;
 
-  // Final address-mode pass: do not sample/cap address linework at allowed zooms.
-  // If an address v2 file still misses lines after this, the missing geometry is in the data/converter, not the renderer.
+  // Address linework stays uncapped at allowed zooms. If address lines are still missing,
+  // the problem is now almost certainly in the optimized address data/converter.
   if (kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'))) {
     return Infinity;
   }
 
   let base;
   if (kind === 'stress') {
-    base = z < 13 ? 130000 : z < 14 ? 230000 : z < 15 ? 380000 : z < 16 ? 560000 : 760000;
+    base = z < 13 ? 112000 : z < 14 ? 198000 : z < 15 ? 325000 : z < 16 ? 480000 : 650000;
   } else if (kind === 'type') {
-    base = z < 13 ? 125000 : z < 14 ? 220000 : z < 15 ? 360000 : z < 16 ? 540000 : 740000;
+    base = z < 13 ? 108000 : z < 14 ? 190000 : z < 15 ? 310000 : z < 16 ? 465000 : 635000;
   } else {
-    base = z < 13 ? 65000 : z < 14 ? 140000 : z < 15 ? 260000 : 420000;
+    base = z < 13 ? 56000 : z < 14 ? 120000 : z < 15 ? 225000 : 360000;
   }
   return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
 }
 function pointCap(kind){
-  // Point overlays are cheap compared with line overlays. Do not cap them by default;
-  // only the bike-parking zoom rule hides destination detail unless full-detail override is on.
+  if (state.detailOverride) return Infinity;
+  const z = map?.getZoom?.() || 11;
+  if (kind === 'dest') return z < 12 ? 45000 : z < 13 ? 70000 : Infinity;
+  if (kind === 'bad') return z < 12 ? 25000 : z < 13 ? 40000 : Infinity;
   return Infinity;
 }
 function minZoomForTypeBucket(bucket){
@@ -1814,7 +1816,6 @@ function render(){
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
-  drawDataRangeBoundary(data, m);
   if (ds.kind === 'address') drawAddress(data, m); else drawCity(data, m);
   applyMapZoomFloor({ clamp:true });
   state.autoFitPending = false;
@@ -1850,45 +1851,6 @@ function drawBoundary(data){
     const g = L.geoJSON(data.lastCityGeoJSON, { renderer: canvasRenderer, interactive:false, style:{ color:'#020617', weight:3, fill:false, opacity:.9 } }).addTo(layers.boundary);
     if (state.autoFitPending) { try { map.fitBounds(g.getBounds(), {padding:[25,25]}); } catch{} }
   }
-}
-
-function milesToMeters(mi){ return Math.max(0, Number(mi) || 0) * 1609.344; }
-function dataRangeCenter(data, m){
-  const c = data?.coords;
-  if (Number.isFinite(+c?.lat) && Number.isFinite(+(c?.lng ?? c?.lon))) return [+c.lat, +(c.lng ?? c.lon)];
-  const s = m?.startCoords;
-  if (Number.isFinite(+s?.lat) && Number.isFinite(+(s?.lon ?? s?.lng))) return [+s.lat, +(s.lon ?? s.lng)];
-  const meta = data?.cityMetadata || {};
-  if (Number.isFinite(+meta.downtownLat) && Number.isFinite(+meta.downtownLon)) return [+meta.downtownLat, +meta.downtownLon];
-  const samples = (data?.lastCityRawResults || []).filter(x => Number.isFinite(+x.lat) && Number.isFinite(+x.lon));
-  if (samples.length) {
-    const best = samples.find(x => x.status === 'used') || samples[0];
-    return [+best.lat, +best.lon];
-  }
-  return null;
-}
-function dataRangeRadiusMiles(data){
-  const candidates = [data?.radius, data?.cityRadius, data?.cityMetadata?.dataRange, data?.cityMetadata?.radius, data?.cityMetadata?.cityRadius];
-  for (const value of candidates) {
-    const n = Number(value);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return 0;
-}
-function drawDataRangeBoundary(data, m){
-  const center = dataRangeCenter(data, m);
-  const radiusMi = dataRangeRadiusMiles(data);
-  if (!center || !radiusMi) return;
-  L.circle(center, {
-    renderer: canvasRenderer,
-    interactive:false,
-    radius:milesToMeters(radiusMi),
-    color:'#38bdf8',
-    weight:2,
-    opacity:.85,
-    fill:false,
-    dashArray:'8 8'
-  }).addTo(layers.range);
 }
 
 function drawAddress(data, m){
@@ -1962,8 +1924,7 @@ function samplePopup(s, inSubset){
     ['# destinations', destinationCount(s)],
     ['Destination score', fmtView(s.destScore)],
     ['Risk', `${fmtView(riskCount)} intersections · ${fmtView(s.badIntPerMi)}/mi`],
-    ['Furthest reaches', reachSummary(s)],
-    ['Score breakdown', scoreBreakdownHtml(s)]
+    ['Furthest reaches', reachSummary(s)]
   ];
   return `<div class="popup-title">${fmtView(focusScore)} <span style="color:#64748b">(${escapeHtml(state.focus)})</span></div>${popupRows(rows)}`;
 }
