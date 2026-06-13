@@ -222,16 +222,8 @@ const SAMPLE_FILE_PATHS = [
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
 let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
-const canvasRenderer = L.canvas({ padding: 0.25 });
+const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
-const renderJobs = { main:0, type:0, stress:0, dest:0, bad:0 };
-const RENDER_JOB_KEYS = ['main','type','stress','dest','bad'];
-const POLYLINE_RENDER_BATCH = 600;
-const POINT_RENDER_BATCH = 1200;
-const MULTILINE_SEGMENTS_PER_LAYER = 1000;
-const RENDER_TARGET_MS = { main: 2200, type: 2400, stress: 2400, dest: 1800, bad: 1200 };
-const SAMPLE_FETCH_ATTEMPTS = 3;
-const SAMPLE_FETCH_RETRY_DELAY_MS = 700;
 const DENSE_POINT_MIN_ZOOM = 12;
 const BIKE_PARKING_MIN_ZOOM = 13;
 
@@ -262,118 +254,25 @@ async function initMap(){
 }
 
 function resetLayers(){
-  cancelRenderJobs();
   dynamicVectors.length = 0;
   Object.values(layers).forEach(l => l.clearLayers());
 }
-
-function bumpRenderJob(key){
-  renderJobs[key] = (renderJobs[key] || 0) + 1;
-  return renderJobs[key];
-}
-function cancelRenderJob(key){ bumpRenderJob(key); }
-function cancelRenderJobs(keys=RENDER_JOB_KEYS){ keys.forEach(cancelRenderJob); }
-function scheduleChunkedRender(jobKey, items, drawItem, batchSize=POLYLINE_RENDER_BATCH, opts={}){
-  const list = Array.isArray(items) ? items : [];
-  if (!list.length) return;
-
-  const token = bumpRenderJob(jobKey);
-  const targetMs = opts.targetMs ?? RENDER_TARGET_MS[jobKey] ?? 2200;
-  const targetFrames = Math.max(1, Math.ceil(targetMs / 16));
-  const adaptiveBatch = Math.max(1, Math.max(batchSize, Math.ceil(list.length / targetFrames)));
-  const immediateLimit = opts.immediateLimit ?? adaptiveBatch;
-  let index = 0;
-  const schedule = window.requestAnimationFrame || (cb => setTimeout(cb, 0));
-
-  function finish(){
-    if (renderJobs[jobKey] === token) opts.onDone?.();
-  }
-
-  if (list.length <= immediateLimit) {
-    for (; index < list.length; index++) {
-      if (renderJobs[jobKey] !== token) return;
-      drawItem(list[index], index);
-    }
-    finish();
-    return;
-  }
-
-  function step(){
-    if (renderJobs[jobKey] !== token) return;
-    const end = Math.min(index + adaptiveBatch, list.length);
-    for (; index < end; index++) drawItem(list[index], index);
-    if (index < list.length) schedule(step);
-    else finish();
-  }
-  step();
-}
-function clearDynamicVectorsByOwner(owner){
-  for (let i = dynamicVectors.length - 1; i >= 0; i--) {
-    if (dynamicVectors[i].owner === owner) dynamicVectors.splice(i, 1);
-  }
-}
-function clearMainLayer(){
-  cancelRenderJob('main');
-  layers.main?.clearLayers();
-  clearDynamicVectorsByOwner('main');
-}
-function clearOverlayLayer(name){
-  cancelRenderJob(name);
-  layers[name]?.clearLayers();
-  clearDynamicVectorsByOwner(name);
-}
 function clearOverlayLayers(){
-  ['bad','stress','type','dest'].forEach(clearOverlayLayer);
+  ['bad','stress','type','dest'].forEach(k => layers[k]?.clearLayers());
+  for (let i = dynamicVectors.length - 1; i >= 0; i--) {
+    if (dynamicVectors[i].overlay) dynamicVectors.splice(i, 1);
+  }
 }
-function addDynamicPolyline(latlngs, options={}, layer, owner='main'){
+function addDynamicPolyline(latlngs, options, layer, overlay=false){
   const baseWeight = options.baseWeight ?? options.weight ?? 1;
-  const z = options.z ?? 0;
-  const renderOptions = { ...options };
-  delete renderOptions.baseWeight;
-  delete renderOptions.z;
-
   const poly = L.polyline(latlngs, {
     renderer: canvasRenderer,
     interactive: false,
-    ...renderOptions,
+    ...options,
     weight: dynamicWeight(baseWeight)
   }).addTo(layer);
-  dynamicVectors.push({ poly, baseWeight, owner, z });
+  dynamicVectors.push({ poly, baseWeight, overlay });
   return poly;
-}
-function restackDynamicVectorsByOwner(owner){
-  dynamicVectors
-    .filter(item => item.owner === owner && item.poly?.bringToFront)
-    .sort((a,b) => (a.z ?? 0) - (b.z ?? 0))
-    .forEach(item => item.poly.bringToFront());
-}
-function isMultiPolyline(latlngs){
-  return Array.isArray(latlngs) && Array.isArray(latlngs[0]) && Array.isArray(latlngs[0][0]);
-}
-function pushPolylineChunks(items, latlngs, options){
-  if (!latlngs?.length) return;
-  if (isMultiPolyline(latlngs) && latlngs.length > MULTILINE_SEGMENTS_PER_LAYER) {
-    for (let i = 0; i < latlngs.length; i += MULTILINE_SEGMENTS_PER_LAYER) {
-      items.push({ latlngs: latlngs.slice(i, i + MULTILINE_SEGMENTS_PER_LAYER), options });
-    }
-  } else {
-    items.push({ latlngs, options });
-  }
-}
-function drawPolylineItemsChunked(jobKey, items, layer, owner=jobKey, opts={}){
-  scheduleChunkedRender(
-    jobKey,
-    items,
-    item => addDynamicPolyline(item.latlngs, item.options, layer, owner),
-    POLYLINE_RENDER_BATCH,
-    {
-      ...opts,
-      onDone: () => {
-        if (opts.restack) restackDynamicVectorsByOwner(owner);
-        opts.onDone?.();
-      }
-    }
-  );
 }
 function updateDynamicWeightsOnly(){
   if (!map) return;
@@ -385,7 +284,7 @@ function updateDynamicWeightsOnly(){
 function renderOverlaysOnly(){
   clearOverlayLayers();
   const ds = activeDataset();
-  if (!ds) { updateOverlayLegend(null, null); return; }
+  if (!ds) return;
   drawOverlays(ds.data, currentMetrics());
 }
 function shouldDrawBikeParking(){ return map && map.getZoom() >= BIKE_PARKING_MIN_ZOOM; }
@@ -395,11 +294,7 @@ function maybeRefreshBikeParkingOverlay(){
   if (state.lastBikeParkingVisible === undefined) state.lastBikeParkingVisible = visible;
   if (state.overlays.dest && state.lastBikeParkingVisible !== visible) {
     state.lastBikeParkingVisible = visible;
-    const ds = activeDataset();
-    if (!ds) return;
-    clearOverlayLayer('dest');
-    drawOverlayLayer('dest', ds.data, currentMetrics());
-    updateOverlayLegend(ds.data, currentMetrics());
+    renderOverlaysOnly();
   } else {
     state.lastBikeParkingVisible = visible;
   }
@@ -472,7 +367,7 @@ function prettifySampleLabel(name){
   let base = raw.split('/').pop() || raw;
   try { base = decodeURIComponent(base); } catch {}
   if (/39\.98404_-83/i.test(base)) return COLUMBUS_ADDRESS_LABEL;
-  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(base)) return 'Copenhagen Denmark';
+  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(base)) return 'Copenhagen, Denmark';
   return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
@@ -559,12 +454,6 @@ async function resolveSampleFiles(){
 
 function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
-}
-function sleep(ms){
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-function isAbortLikeError(err){
-  return err?.name === 'AbortError' || /aborted|operation was aborted/i.test(String(err?.message || err || ''));
 }
 
 function pendingSampleEntries(){
@@ -756,7 +645,7 @@ async function loadSelectedSampleEntries(keys){
       setSampleStatus(`Loaded ${label}.`, processedSamples, total);
     } catch (err) {
       setLoadingSampleButton(key, label, 'Failed', 100);
-      // Keep failed samples retryable. A transient aborted fetch should not permanently hide the sample.
+      state.sampleLoadedKeys.add(key);
       processedSamples += 1;
       const msg = `${label}: ${err.message || err}`;
       state.sampleErrors.push(msg);
@@ -803,42 +692,15 @@ function prioritizeSelectedSample(){
   openSamplePicker();
 }
 
-async function fetchSampleZipBlob(entry, onPhase = () => {}){
-  const url = encodeURI(entry.url);
-  let lastErr = null;
-
-  for (let attempt = 1; attempt <= SAMPLE_FETCH_ATTEMPTS; attempt++) {
-    try {
-      const retryLabel = attempt > 1 ? ` (retry ${attempt}/${SAMPLE_FETCH_ATTEMPTS})` : '';
-      onPhase(`fetching zip${retryLabel}`);
-      await nextPaint();
-
-      // Use the browser's normal cache behavior for large static sample zips.
-      // `no-store` forced a full re-download every time and made aborts more likely on big samples.
-      const response = await fetch(url, { cache: 'default' });
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-
-      onPhase(`reading zip${retryLabel}`);
-      await nextPaint();
-      return await response.blob();
-    } catch (err) {
-      lastErr = err;
-      const canRetry = attempt < SAMPLE_FETCH_ATTEMPTS && isAbortLikeError(err);
-      if (!canRetry) break;
-      onPhase(`fetch aborted; retrying`);
-      await sleep(SAMPLE_FETCH_RETRY_DELAY_MS * attempt);
-    }
-  }
-
-  throw lastErr || new Error('Could not fetch sample zip.');
-}
-
 async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
-  const zipBlob = await fetchSampleZipBlob(entry, onPhase);
-
-  onPhase('decompressing zip');
+  onPhase('fetching zip');
   await nextPaint();
-  const zip = await JSZip.loadAsync(zipBlob);
+  const response = await fetch(encodeURI(entry.url), { cache: 'no-store' });
+  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+
+  onPhase('downloading/decompressing zip');
+  await nextPaint();
+  const zip = await JSZip.loadAsync(await response.blob());
   let added = 0;
   let lastItem = null;
 
@@ -853,13 +715,11 @@ async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
           embedded: true,
           sample: true,
           sampleGroup: SAMPLE_SET_NAME,
-          label: sampleLabel(entry),
-          sampleKey: sampleKey(entry)
+          label: sampleLabel(entry)
         }
       );
       if (item) {
         item.label = sampleLabel(entry);
-        item.sampleKey = sampleKey(entry);
         added += 1;
         lastItem = item;
       }
@@ -868,7 +728,6 @@ async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
 
   return { added, lastItem };
 }
-
 
 function chooseNextSampleEntry(){
   let idx = -1;
@@ -884,22 +743,15 @@ function chooseNextSampleEntry(){
 function showNewDataset(item){
   if (!item) return;
   const activeStillExists = state.datasets.some(d => d.id === state.currentId && d.kind === state.mode);
-  let shouldRender = false;
-
   if (!activeStillExists) {
     state.mode = item.kind;
     state.currentId = item.id;
     state.autoFitPending = true;
-    shouldRender = true;
   }
-
   updateFileSummary();
   syncModeButtons();
   rebuildSelect();
-
-  // Loading a background sample should not redraw the current map.
-  // The new sample renders when the user selects it, which cuts main-thread load during downloads.
-  if (shouldRender) render();
+  render();
 }
 
 function columbusAddressIsLoaded(){
@@ -1034,7 +886,7 @@ async function ingestText(text, name, options = {}){
     const rawLabel = kind === 'city' ? (data.cityInput || data.cityMetadata?.city || name) : (data.addressInput || name);
     const label = kind === 'address' && !options.label ? formatCoordinateAddressLabel(rawLabel, 4) : rawLabel;
     const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    const item = { id, name, label: options.label || label, kind, data, embedded: !!options.embedded, sample: !!options.sample, sampleGroup: options.sampleGroup || null, sampleKey: options.sampleKey || null };
+    const item = { id, name, label: options.label || label, kind, data, embedded: !!options.embedded, sample: !!options.sample, sampleGroup: options.sampleGroup || null };
     state.datasets.push(item);
     return item;
   } catch { return null; }
@@ -1175,17 +1027,7 @@ function syncModeButtons(){
 function selectDataset(id){ state.currentId = id; state.autoFitPending = true; updateLoadedDatasetButtons(); render(); }
 function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
 function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
-function setAddressView(v){
-  state.addressView=v;
-  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
-  const ds = activeDataset();
-  if (ds?.kind === 'address') {
-    clearMainLayer();
-    drawAddressMain(currentMetrics());
-  } else {
-    render();
-  }
-}
+function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
 function setTolerance(v){
@@ -1196,24 +1038,10 @@ function setTolerance(v){
 }
 function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
-  if (name === 'stress' && state.overlays.stress) {
-    state.overlays.type = false;
-    clearOverlayLayer('type');
-  }
-  if (name === 'type' && state.overlays.type) {
-    state.overlays.stress = false;
-    clearOverlayLayer('stress');
-  }
+  if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
+  if (name === 'type' && state.overlays.type) state.overlays.stress = false;
   ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
-  const ds = activeDataset();
-  if (!ds) return;
-  if (state.overlays[name]) {
-    clearOverlayLayer(name);
-    drawOverlayLayer(name, ds.data, currentMetrics());
-  } else {
-    clearOverlayLayer(name);
-  }
-  updateOverlayLegend(ds.data, currentMetrics());
+  renderOverlaysOnly();
 }
 
 function score(m, focus=state.focus){
@@ -1274,7 +1102,7 @@ function currentMetrics(){
 function render(){
   resetLayers();
   const ds = activeDataset();
-  if (!ds) { updateStats(null); updateOverlayLegend(null, null); return; }
+  if (!ds) { updateStats(null); return; }
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
@@ -1319,13 +1147,9 @@ function drawAddress(data, m){
   if (c) { L.marker([c.lat, c.lng]).bindPopup(data.addressInput || 'Start address').addTo(layers.points); if (state.autoFitPending) map.setView([c.lat,c.lng], 12); }
   if (!m) return;
   drawHull(m);
-  drawAddressMain(m);
+  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main);
+  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main);
   drawReachPoints(m);
-}
-function drawAddressMain(m){
-  if (!m) return;
-  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main, 'main');
-  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main, 'main');
 }
 
 
@@ -1460,19 +1284,15 @@ function drawHull(m){
   if (m.hullSmooth) L.geoJSON(m.hullSmooth, { renderer: canvasRenderer, interactive:false, style:{ color:'#ef4444', weight:2, fill:false } }).addTo(layers.hull);
 }
 
-function drawGradient(buckets, layer, owner='main'){
-  const items = [];
+function drawGradient(buckets, layer, overlay=false){
   (buckets||[]).forEach((lines,i)=>{
-    if(lines?.length) pushPolylineChunks(items, lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 });
+    if(lines?.length) addDynamicPolyline(lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay);
   });
-  drawPolylineItemsChunked(owner, items, layer, owner);
 }
-function drawRoutes(lines, layer, owner='main'){
-  const items = [];
+function drawRoutes(lines, layer, overlay=false){
   (lines||[]).forEach(l => {
-    if(l.seg) items.push({ latlngs:l.seg, options:{ color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 } });
+    if(l.seg) addDynamicPolyline(l.seg, { color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }, layer, overlay);
   });
-  drawPolylineItemsChunked(owner, items, layer, owner);
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -1497,82 +1317,51 @@ function cityRankDisclaimer(data){
 }
 
 function drawOverlays(data, m){
-  updateOverlayLegend(data, m);
-  ['type','stress','dest','bad'].forEach(name => {
-    if (state.overlays[name]) drawOverlayLayer(name, data, m);
-  });
-}
-function updateOverlayLegend(data, m){
   const keys = [];
-  if (data) {
-    const pointKey = cityPointKey();
-    if (pointKey) keys.push(pointKey);
-    const rankNote = cityRankDisclaimer(data);
-    if (rankNote) keys.push(rankNote);
-  }
+  const pointKey = cityPointKey();
+  if (pointKey) keys.push(pointKey);
+  const rankNote = cityRankDisclaimer(data);
+  if (rankNote) keys.push(rankNote);
 
   if (state.overlays.type) {
+    const c = data.cityLines?.classification;
+    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, true);
+    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, true);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
   if (state.overlays.stress) {
+    const cityStress = data.cityLines?.stress;
+    const addrStress = m?.lines?.stress;
+    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, true);
+    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, true);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
   if (state.overlays.dest) {
-    const info = data ? destinationOverlayInfo(data, m) : { bikeParkingHidden:0 };
-    if (info.bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${info.bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
+    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
+    const bikeParkingVisible = shouldDrawBikeParking();
+    let bikeParkingHidden = 0;
+    pois.forEach(p => {
+      const isBikeParking = isBikeParkingPoi(p);
+      if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
+      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
+        .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
+        .addTo(layers.dest);
+    });
+    if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
     keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
   }
   if (state.overlays.bad) {
+    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
+    pts.forEach(p => {
+      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
+        .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
+        .addTo(layers.bad);
+    });
     keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
   }
   document.getElementById('legend').innerHTML = keys.join('');
-}
-function destinationOverlayInfo(data, m){
-  const sourcePois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-  const bikeParkingVisible = shouldDrawBikeParking();
-  let bikeParkingHidden = 0;
-  const visiblePois = [];
-  sourcePois.forEach(p => {
-    if (!p || !Number.isFinite(+p.lat) || !Number.isFinite(+p.lon)) return;
-    const isBikeParking = isBikeParkingPoi(p);
-    if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
-    visiblePois.push(p);
-  });
-  return { visiblePois, bikeParkingHidden };
-}
-function drawOverlayLayer(name, data, m){
-  if (name === 'type') {
-    const c = data.cityLines?.classification;
-    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, 'type');
-    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, 'type');
-    return;
-  }
-  if (name === 'stress') {
-    const cityStress = data.cityLines?.stress;
-    const addrStress = m?.lines?.stress;
-    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, 'stress');
-    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, 'stress');
-    return;
-  }
-  if (name === 'dest') {
-    const { visiblePois } = destinationOverlayInfo(data, m);
-    scheduleChunkedRender('dest', visiblePois, p => {
-      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
-        .bindPopup(() => `${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
-        .addTo(layers.dest);
-    }, POINT_RENDER_BATCH, { targetMs: RENDER_TARGET_MS.dest });
-    return;
-  }
-  if (name === 'bad') {
-    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-    scheduleChunkedRender('bad', pts.filter(p => Number.isFinite(+p?.lat) && Number.isFinite(+p?.lon)), p => {
-      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
-        .bindPopup(() => `Penalty: ${fmtSig(pen,1)}`)
-        .addTo(layers.bad);
-    }, POINT_RENDER_BATCH, { targetMs: RENDER_TARGET_MS.bad });
-  }
 }
 function cityPointKey(){
   if (state.mode !== 'city' || state.pointsView !== 'rank') return '';
@@ -1587,32 +1376,16 @@ function keyBlock(title, items){
 function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
-function drawStressBuckets(b, layer, owner='stress'){
-  const items = [];
+function drawStressBuckets(b, layer, overlay=false){
   [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
-    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.62 });
+    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
   });
-  drawPolylineItemsChunked(owner, items, layer, owner);
 }
-function drawTypeBuckets(b, layer, owner='type'){
-  const items = [];
-
-  // Draw the primary bike network first, then lower-priority walk/service/crossing geometry last.
-  // z controls final visual stacking after progressive rendering finishes.
-  [
-    ['paths',    '#16a34a', 1.7, 90],
-    ['lanes',    '#2563eb', 1.7, 80],
-    ['friendly', '#ffee58', 1.4, 70],
-    ['roads',    '#ef4444', 1,   50],
-    ['others',   '#b38804', 1,   40],
-    ['walking',  '#9ca3af', .35, 20],
-    ['services', '#4b5563', .35, 10],
-    ['crossings','#22d3ee', .8,  0]
-  ].forEach(([k,c,r,z])=>{
-    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.65, z });
+function drawTypeBuckets(b, layer, overlay=false){
+  // User-facing order: primary bike network first, then lower-priority walk/service/crossing geometry last.
+  [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
+    if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
   });
-
-  drawPolylineItemsChunked(owner, items, layer, owner, { targetMs: RENDER_TARGET_MS.type, restack:true });
 }
 
 function reportedDeviceMemoryGb(){
