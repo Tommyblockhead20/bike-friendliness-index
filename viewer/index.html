@@ -230,6 +230,8 @@ const POLYLINE_RENDER_BATCH = 600;
 const POINT_RENDER_BATCH = 1200;
 const MULTILINE_SEGMENTS_PER_LAYER = 1000;
 const RENDER_TARGET_MS = { main: 2200, type: 2400, stress: 2400, dest: 1800, bad: 1200 };
+const SAMPLE_FETCH_ATTEMPTS = 3;
+const SAMPLE_FETCH_RETRY_DELAY_MS = 700;
 const DENSE_POINT_MIN_ZOOM = 12;
 const BIKE_PARKING_MIN_ZOOM = 13;
 
@@ -558,6 +560,12 @@ async function resolveSampleFiles(){
 function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
+function sleep(ms){
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+function isAbortLikeError(err){
+  return err?.name === 'AbortError' || /aborted|operation was aborted/i.test(String(err?.message || err || ''));
+}
 
 function pendingSampleEntries(){
   return state.sampleEntries.filter(entry => !state.sampleLoadedKeys.has(sampleKey(entry)));
@@ -748,7 +756,7 @@ async function loadSelectedSampleEntries(keys){
       setSampleStatus(`Loaded ${label}.`, processedSamples, total);
     } catch (err) {
       setLoadingSampleButton(key, label, 'Failed', 100);
-      state.sampleLoadedKeys.add(key);
+      // Keep failed samples retryable. A transient aborted fetch should not permanently hide the sample.
       processedSamples += 1;
       const msg = `${label}: ${err.message || err}`;
       state.sampleErrors.push(msg);
@@ -795,15 +803,42 @@ function prioritizeSelectedSample(){
   openSamplePicker();
 }
 
-async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
-  onPhase('fetching zip');
-  await nextPaint();
-  const response = await fetch(encodeURI(entry.url), { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+async function fetchSampleZipBlob(entry, onPhase = () => {}){
+  const url = encodeURI(entry.url);
+  let lastErr = null;
 
-  onPhase('downloading/decompressing zip');
+  for (let attempt = 1; attempt <= SAMPLE_FETCH_ATTEMPTS; attempt++) {
+    try {
+      const retryLabel = attempt > 1 ? ` (retry ${attempt}/${SAMPLE_FETCH_ATTEMPTS})` : '';
+      onPhase(`fetching zip${retryLabel}`);
+      await nextPaint();
+
+      // Use the browser's normal cache behavior for large static sample zips.
+      // `no-store` forced a full re-download every time and made aborts more likely on big samples.
+      const response = await fetch(url, { cache: 'default' });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+
+      onPhase(`reading zip${retryLabel}`);
+      await nextPaint();
+      return await response.blob();
+    } catch (err) {
+      lastErr = err;
+      const canRetry = attempt < SAMPLE_FETCH_ATTEMPTS && isAbortLikeError(err);
+      if (!canRetry) break;
+      onPhase(`fetch aborted; retrying`);
+      await sleep(SAMPLE_FETCH_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  throw lastErr || new Error('Could not fetch sample zip.');
+}
+
+async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
+  const zipBlob = await fetchSampleZipBlob(entry, onPhase);
+
+  onPhase('decompressing zip');
   await nextPaint();
-  const zip = await JSZip.loadAsync(await response.blob());
+  const zip = await JSZip.loadAsync(zipBlob);
   let added = 0;
   let lastItem = null;
 
@@ -818,11 +853,13 @@ async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
           embedded: true,
           sample: true,
           sampleGroup: SAMPLE_SET_NAME,
-          label: sampleLabel(entry)
+          label: sampleLabel(entry),
+          sampleKey: sampleKey(entry)
         }
       );
       if (item) {
         item.label = sampleLabel(entry);
+        item.sampleKey = sampleKey(entry);
         added += 1;
         lastItem = item;
       }
@@ -831,6 +868,7 @@ async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
 
   return { added, lastItem };
 }
+
 
 function chooseNextSampleEntry(){
   let idx = -1;
@@ -846,15 +884,22 @@ function chooseNextSampleEntry(){
 function showNewDataset(item){
   if (!item) return;
   const activeStillExists = state.datasets.some(d => d.id === state.currentId && d.kind === state.mode);
+  let shouldRender = false;
+
   if (!activeStillExists) {
     state.mode = item.kind;
     state.currentId = item.id;
     state.autoFitPending = true;
+    shouldRender = true;
   }
+
   updateFileSummary();
   syncModeButtons();
   rebuildSelect();
-  render();
+
+  // Loading a background sample should not redraw the current map.
+  // The new sample renders when the user selects it, which cuts main-thread load during downloads.
+  if (shouldRender) render();
 }
 
 function columbusAddressIsLoaded(){
@@ -989,7 +1034,7 @@ async function ingestText(text, name, options = {}){
     const rawLabel = kind === 'city' ? (data.cityInput || data.cityMetadata?.city || name) : (data.addressInput || name);
     const label = kind === 'address' && !options.label ? formatCoordinateAddressLabel(rawLabel, 4) : rawLabel;
     const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    const item = { id, name, label: options.label || label, kind, data, embedded: !!options.embedded, sample: !!options.sample, sampleGroup: options.sampleGroup || null };
+    const item = { id, name, label: options.label || label, kind, data, embedded: !!options.embedded, sample: !!options.sample, sampleGroup: options.sampleGroup || null, sampleKey: options.sampleKey || null };
     state.datasets.push(item);
     return item;
   } catch { return null; }
@@ -1560,9 +1605,9 @@ function drawTypeBuckets(b, layer, owner='type'){
     ['friendly', '#ffee58', 1.4, 70],
     ['roads',    '#ef4444', 1,   50],
     ['others',   '#b38804', 1,   40],
-    ['walking',  '#9ca3af', .35, 30],
-    ['services', '#4b5563', .35, 20],
-    ['crossings','#22d3ee', .8,  10]
+    ['walking',  '#9ca3af', .35, 20],
+    ['services', '#4b5563', .35, 10],
+    ['crossings','#22d3ee', .8,  0]
   ].forEach(([k,c,r,z])=>{
     if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.65, z });
   });
