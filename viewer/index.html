@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BFI Viewer Beta</title>
+  <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -221,6 +222,9 @@ const SAMPLE_FILE_PATHS = [
   'sample-files/39.98404_-83.viewer-pruned.zip'
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
+// The hosted site currently relies on the known sample files below. Keep remote discovery off by default:
+// the manifest/GitHub API probes 404 on the live site and only add noisy failed requests before the real zip load.
+const ENABLE_SAMPLE_DISCOVERY = false;
 let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
@@ -412,37 +416,39 @@ function addSampleEntries(target, entries){
 async function resolveSampleFiles(){
   const byKey = new Map();
 
-  // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta Samples.json.
-  // It can be either ["sample-files/file.zip", ...] or { "files": [ ... ] }.
-  try {
-    const manifestResponse = await fetch(encodeURI(SAMPLE_MANIFEST_PATH), { cache: 'no-store' });
-    if (manifestResponse.ok) {
-      const manifest = await manifestResponse.json();
-      const entries = Array.isArray(manifest) ? manifest : (manifest.files || []);
-      addSampleEntries(byKey, entries);
+  if (ENABLE_SAMPLE_DISCOVERY) {
+    // Preferred: a simple manifest file at viewer/sample-files/BFI Viewer Beta Samples.json.
+    // It can be either ["sample-files/file.zip", ...] or { "files": [ ... ] }.
+    try {
+      const manifestResponse = await fetch(encodeURI(SAMPLE_MANIFEST_PATH));
+      if (manifestResponse.ok) {
+        const manifest = await manifestResponse.json();
+        const entries = Array.isArray(manifest) ? manifest : (manifest.files || []);
+        addSampleEntries(byKey, entries);
+      }
+    } catch (err) {
+      console.info('No sample manifest found; trying GitHub directory discovery.', err);
     }
-  } catch (err) {
-    console.info('No sample manifest found; trying GitHub directory discovery.', err);
+
+    // Also auto-discover every .zip in viewer/sample-files from the public GitHub repo.
+    // Do not return early here: a stale manifest can otherwise hide new samples.
+    try {
+      const apiResponse = await fetch(GITHUB_SAMPLE_DIRECTORY_API);
+      if (apiResponse.ok) {
+        const listing = await apiResponse.json();
+        addSampleEntries(byKey, listing
+          .filter(item => item.type === 'file' && /\.zip$/i.test(item.name))
+          .map(item => ({
+            name: item.name,
+            url: `sample-files/${encodeURIComponent(item.name)}`
+          })));
+      }
+    } catch (err) {
+      console.warn('Could not discover sample files from GitHub:', err);
+    }
   }
 
-  // Also auto-discover every .zip in viewer/sample-files from the public GitHub repo.
-  // Do not return early here: a stale manifest can otherwise hide new samples.
-  try {
-    const apiResponse = await fetch(GITHUB_SAMPLE_DIRECTORY_API, { cache: 'no-store' });
-    if (apiResponse.ok) {
-      const listing = await apiResponse.json();
-      addSampleEntries(byKey, listing
-        .filter(item => item.type === 'file' && /\.zip$/i.test(item.name))
-        .map(item => ({
-          name: item.name,
-          url: `sample-files/${encodeURIComponent(item.name)}`
-        })));
-    }
-  } catch (err) {
-    console.warn('Could not discover sample files from GitHub:', err);
-  }
-
-  // Final safety net: known files from the sample-files folder. Exact spelling/capitalization matters.
+  // Known files from the sample-files folder. Exact spelling/capitalization matters.
   addSampleEntries(byKey, SAMPLE_FILE_PATHS);
   return [...byKey.values()].sort((a, b) => {
     const ca = isColumbusSample(a) ? -1 : 0;
@@ -645,7 +651,7 @@ async function loadSelectedSampleEntries(keys){
       setSampleStatus(`Loaded ${label}.`, processedSamples, total);
     } catch (err) {
       setLoadingSampleButton(key, label, 'Failed', 100);
-      state.sampleLoadedKeys.add(key);
+      // Keep failed samples retryable. An aborted fetch should not permanently hide the sample.
       processedSamples += 1;
       const msg = `${label}: ${err.message || err}`;
       state.sampleErrors.push(msg);
@@ -692,15 +698,68 @@ function prioritizeSelectedSample(){
   openSamplePicker();
 }
 
-async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
-  onPhase('fetching zip');
-  await nextPaint();
-  const response = await fetch(encodeURI(entry.url), { cache: 'no-store' });
-  if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+function sleep(ms){
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-  onPhase('downloading/decompressing zip');
+function sampleUrlCandidates(rawUrl){
+  const raw = String(rawUrl || '').trim();
+  const candidates = [];
+  const add = url => {
+    if (!url) return;
+    try {
+      const absolute = new URL(url, document.baseURI).href;
+      if (!candidates.includes(absolute)) candidates.push(absolute);
+    } catch {}
+  };
+
+  add(raw);
+  if (/^sample-files\//i.test(raw)) {
+    add(`./${raw}`);
+    add(`/viewer/${raw}`);
+    add(`/${raw}`);
+  }
+  return candidates.length ? candidates : [raw];
+}
+
+function isAbortLikeError(err){
+  return err?.name === 'AbortError' || /aborted|operation was aborted|networkerror/i.test(String(err?.message || err || ''));
+}
+
+async function fetchZipArrayBuffer(entry, onPhase = () => {}){
+  const urls = sampleUrlCandidates(entry.url);
+  let lastErr = null;
+  for (const url of urls) {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        onPhase(attempt > 1 ? `retrying zip fetch (${attempt}/2)` : 'fetching zip');
+        await nextPaint();
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+        onPhase('downloading zip');
+        await nextPaint();
+        const buffer = await response.arrayBuffer();
+        if (!buffer || !buffer.byteLength) throw new Error('Downloaded zip was empty.');
+        entry.resolvedUrl = url;
+        return buffer;
+      } catch (err) {
+        lastErr = err;
+        // 404/403 on a candidate path means try the next candidate, not the same one again.
+        if (/^(403|404)\b/.test(String(err?.message || ''))) break;
+        if (!isAbortLikeError(err) && attempt >= 1) break;
+        await sleep(350 * attempt);
+      }
+    }
+  }
+  throw lastErr || new Error(`Could not fetch ${entry.url}`);
+}
+
+async function loadZipAnalysisFromUrl(entry, onPhase = () => {}){
+  const buffer = await fetchZipArrayBuffer(entry, onPhase);
+
+  onPhase('decompressing zip');
   await nextPaint();
-  const zip = await JSZip.loadAsync(await response.blob());
+  const zip = await JSZip.loadAsync(buffer);
   let added = 0;
   let lastItem = null;
 
@@ -1382,7 +1441,6 @@ function drawStressBuckets(b, layer, overlay=false){
   });
 }
 function drawTypeBuckets(b, layer, overlay=false){
-  // User-facing order: primary bike network first, then lower-priority walk/service/crossing geometry last.
   [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
   });
