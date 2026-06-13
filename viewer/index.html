@@ -190,6 +190,7 @@
   </div>
 
 <script>
+
 const state = {
   mode:'address', focus:'balanced', addressView:'none', cityAgg:'best', pointsView:'score', tolerance:'25',
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
@@ -225,11 +226,16 @@ const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead
 // The hosted site currently relies on the known sample files below. Keep remote discovery off by default:
 // the manifest/GitHub API probes 404 on the live site and only add noisy failed requests before the real zip load.
 const ENABLE_SAMPLE_DISCOVERY = false;
-let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
+let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null, renderTimer = null, viewportRenderTimer = null;
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
 const DENSE_POINT_MIN_ZOOM = 12;
 const BIKE_PARKING_MIN_ZOOM = 13;
+const SPATIAL_INDEX_CELL_DEG = 0.006;
+const SPATIAL_INDEX_BUILD_BATCH = 45000;
+let viewportRenderToken = 0;
+const spatialIndexes = new WeakMap();
+const spatialIndexBuilds = new WeakMap();
 
 async function initMap(){
   map = L.map('map', { zoomControl:true, preferCanvas:true }).setView([39.8283,-98.5795], 4);
@@ -239,9 +245,11 @@ async function initMap(){
     clearTimeout(zoomRenderTimer);
     zoomRenderTimer = setTimeout(() => {
       updateDynamicWeightsOnly();
+      scheduleViewportLayerRefresh(70);
       maybeRefreshBikeParkingOverlay();
     }, 60);
   });
+  map.on('moveend', () => scheduleViewportLayerRefresh(110));
 
   setSampleStatus('Loading Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
@@ -258,16 +266,32 @@ async function initMap(){
 }
 
 function resetLayers(){
+  viewportRenderToken++;
+  clearTimeout(viewportRenderTimer);
   dynamicVectors.length = 0;
   Object.values(layers).forEach(l => l.clearLayers());
 }
-function clearOverlayLayers(){
-  ['bad','stress','type','dest'].forEach(k => layers[k]?.clearLayers());
+function layerKeyFor(layer){
+  for (const [key, value] of Object.entries(layers)) {
+    if (value === layer) return key;
+  }
+  return '';
+}
+function clearLayerByKey(key){
+  layers[key]?.clearLayers();
   for (let i = dynamicVectors.length - 1; i >= 0; i--) {
-    if (dynamicVectors[i].overlay) dynamicVectors.splice(i, 1);
+    if (dynamicVectors[i].layerKey === key) dynamicVectors.splice(i, 1);
   }
 }
+function clearOverlayLayers(){
+  ['bad','stress','type','dest'].forEach(clearLayerByKey);
+}
+function clearViewportDynamicLayers(){
+  clearLayerByKey('main');
+  clearOverlayLayers();
+}
 function addDynamicPolyline(latlngs, options, layer, overlay=false){
+  if (!latlngs || !latlngs.length) return null;
   const baseWeight = options.baseWeight ?? options.weight ?? 1;
   const poly = L.polyline(latlngs, {
     renderer: canvasRenderer,
@@ -275,7 +299,7 @@ function addDynamicPolyline(latlngs, options, layer, overlay=false){
     ...options,
     weight: dynamicWeight(baseWeight)
   }).addTo(layer);
-  dynamicVectors.push({ poly, baseWeight, overlay });
+  dynamicVectors.push({ poly, baseWeight, overlay, layerKey: layerKeyFor(layer) });
   return poly;
 }
 function updateDynamicWeightsOnly(){
@@ -285,11 +309,20 @@ function updateDynamicWeightsOnly(){
     item.poly.setStyle({ weight: dynamicWeight(item.baseWeight) });
   }
 }
+function hasViewportDependentLayers(){
+  return !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad || (state.mode === 'address' && state.addressView !== 'none'));
+}
+function scheduleRender(delay=50){
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, delay);
+}
+function scheduleViewportLayerRefresh(delay=90){
+  if (!hasViewportDependentLayers()) return;
+  clearTimeout(viewportRenderTimer);
+  viewportRenderTimer = setTimeout(() => renderViewportDependentLayers(), delay);
+}
 function renderOverlaysOnly(){
-  clearOverlayLayers();
-  const ds = activeDataset();
-  if (!ds) return;
-  drawOverlays(ds.data, currentMetrics());
+  renderViewportDependentLayers();
 }
 function shouldDrawBikeParking(){ return map && map.getZoom() >= BIKE_PARKING_MIN_ZOOM; }
 function isBikeParkingPoi(p){ return Number(p?.weight) === 0.25 || /bike[_\s-]?parking|bicycle[_\s-]?parking/i.test(String(p?.type || p?.name || '')); }
@@ -304,6 +337,283 @@ function maybeRefreshBikeParkingOverlay(){
   }
 }
 function activeDataset(){ return state.datasets.find(d => d.id === state.currentId) || null; }
+
+function pointLat(pt){ return Array.isArray(pt) ? +pt[0] : +(pt?.lat ?? pt?.latitude); }
+function pointLng(pt){ return Array.isArray(pt) ? +pt[1] : +(pt?.lng ?? pt?.lon ?? pt?.longitude); }
+function itemLine(item){ return item?.seg || item; }
+function lineCenter(line){
+  if (!line?.length) return null;
+  const a = line[0], b = line[line.length - 1] || a;
+  const lat1 = pointLat(a), lng1 = pointLng(a), lat2 = pointLat(b), lng2 = pointLng(b);
+  if (![lat1,lng1,lat2,lng2].every(Number.isFinite)) return null;
+  return [(lat1 + lat2) / 2, (lng1 + lng2) / 2];
+}
+function paddedMapBounds(ratio=0.55){
+  const b = map.getBounds();
+  const latPad = Math.max(0.001, Math.abs(b.getNorth() - b.getSouth()) * ratio);
+  const lngPad = Math.max(0.001, Math.abs(b.getEast() - b.getWest()) * ratio);
+  return { north:b.getNorth()+latPad, south:b.getSouth()-latPad, east:b.getEast()+lngPad, west:b.getWest()-lngPad };
+}
+function pointInBoundsLatLng(lat, lng, b){
+  return Number.isFinite(lat) && Number.isFinite(lng) && lat >= b.south && lat <= b.north && lng >= b.west && lng <= b.east;
+}
+function pointLikeInBounds(p, b){
+  return pointInBoundsLatLng(+(p?.lat ?? p?.latitude), +(p?.lon ?? p?.lng ?? p?.longitude), b);
+}
+function cellKey(lat, lng, cellSize=SPATIAL_INDEX_CELL_DEG){
+  return `${Math.floor(lat/cellSize)},${Math.floor(lng/cellSize)}`;
+}
+function buildSpatialIndex(items, getLine=itemLine){
+  if (!items?.length) return Promise.resolve({ cells:new Map(), items:[], count:0, cellSize:SPATIAL_INDEX_CELL_DEG });
+  const cached = spatialIndexes.get(items);
+  if (cached) return Promise.resolve(cached);
+  const building = spatialIndexBuilds.get(items);
+  if (building) return building;
+  const idx = { cells:new Map(), items, count:items.length, cellSize:SPATIAL_INDEX_CELL_DEG };
+  let i = 0;
+  const promise = new Promise(resolve => {
+    function step(){
+      const end = Math.min(items.length, i + SPATIAL_INDEX_BUILD_BATCH);
+      for (; i < end; i++) {
+        const center = lineCenter(getLine(items[i]));
+        if (!center) continue;
+        const key = cellKey(center[0], center[1], idx.cellSize);
+        let bucket = idx.cells.get(key);
+        if (!bucket) idx.cells.set(key, bucket = []);
+        bucket.push(items[i]);
+      }
+      if (i < items.length) requestAnimationFrame(step);
+      else {
+        spatialIndexes.set(items, idx);
+        spatialIndexBuilds.delete(items);
+        resolve(idx);
+      }
+    }
+    step();
+  });
+  spatialIndexBuilds.set(items, promise);
+  return promise;
+}
+function querySpatialIndex(idx, bounds, cap=Infinity){
+  const buckets = [];
+  let total = 0;
+  if (!idx?.cells?.size) return { items:[], total:0, capped:false };
+  const cs = idx.cellSize || SPATIAL_INDEX_CELL_DEG;
+  const minX = Math.floor(bounds.south / cs), maxX = Math.floor(bounds.north / cs);
+  const minY = Math.floor(bounds.west / cs), maxY = Math.floor(bounds.east / cs);
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const bucket = idx.cells.get(`${x},${y}`);
+      if (bucket?.length) { buckets.push(bucket); total += bucket.length; }
+    }
+  }
+  if (!total) return { items:[], total:0, capped:false };
+  if (!Number.isFinite(cap) || total <= cap) {
+    const items = [];
+    buckets.forEach(bucket => { for (let i = 0; i < bucket.length; i++) items.push(bucket[i]); });
+    return { items, total, capped:false };
+  }
+  const items = [];
+  const step = total / cap;
+  let seen = 0, next = 0;
+  for (const bucket of buckets) {
+    for (let i = 0; i < bucket.length; i++, seen++) {
+      if (seen >= next && items.length < cap) {
+        items.push(bucket[i]);
+        next += step;
+      }
+    }
+  }
+  return { items, total, capped:true };
+}
+function sampleItems(items, cap){
+  if (!items || !items.length) return [];
+  if (!cap || items.length <= cap) return items;
+  const out = [];
+  const step = items.length / cap;
+  for (let i = 0; i < cap; i++) out.push(items[Math.floor(i * step)]);
+  return out;
+}
+function visibleLineCap(kind, bucket=''){
+  const z = map?.getZoom?.() || 10;
+  const lightDetail = ['walking','services','crossings','gray'].includes(bucket);
+  if (kind === 'addressRoutes') return z < 11 ? 5000 : z < 12 ? 12000 : z < 13 ? 28000 : z < 14 ? 55000 : 90000;
+  if (kind === 'addressGradient') return z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 40000 : z < 13 ? 80000 : z < 14 ? 150000 : 240000;
+  if (kind === 'stress') return z < 10 ? 9000 : z < 11 ? 20000 : z < 12 ? 45000 : z < 13 ? 90000 : z < 14 ? 160000 : 260000;
+  if (kind === 'type') {
+    const base = z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 42000 : z < 13 ? 85000 : z < 14 ? 150000 : 240000;
+    return lightDetail ? Math.floor(base * 0.45) : base;
+  }
+  return z < 11 ? 10000 : z < 13 ? 40000 : 120000;
+}
+function pointCap(kind){
+  const z = map?.getZoom?.() || 10;
+  if (kind === 'dest') return z < 11 ? 700 : z < 12 ? 1400 : z < 13 ? 3000 : z < 14 ? 6000 : 12000;
+  return z < 11 ? 1000 : z < 13 ? 4000 : 12000;
+}
+function minZoomForTypeBucket(bucket){
+  if (bucket === 'crossings') return 13;
+  if (bucket === 'walking' || bucket === 'services') return 12;
+  if (bucket === 'others') return 10;
+  return 0;
+}
+async function visibleItemsForLines(items, token, kind, bucket='', getLine=itemLine){
+  if (!items?.length) return { selected:[], visibleCount:0, sourceCount:0, capped:false };
+  const idx = await buildSpatialIndex(items, getLine);
+  if (token !== viewportRenderToken) return null;
+  const cap = visibleLineCap(kind, bucket);
+  const visible = querySpatialIndex(idx, paddedMapBounds(), cap);
+  return { selected:visible.items, visibleCount:visible.total, sourceCount:items.length, capped:visible.capped };
+}
+async function drawLineBucketAsync(items, options, layer, overlay, token, kind, bucket, notes, getLine=itemLine){
+  const result = await visibleItemsForLines(items, token, kind, bucket, getLine);
+  if (!result || token !== viewportRenderToken) return null;
+  if (result.capped) notes.capped = true;
+  if (result.selected.length) addDynamicPolyline(result.selected.map(getLine), options, layer, overlay);
+  return result;
+}
+
+
+const flatSegmentIndexes = new WeakMap();
+const flatSegmentIndexBuilds = new WeakMap();
+function validOptimizedCityLines(store){
+  return !!(store && store.format === 'flat-pairs-v1' && Array.isArray(store.pairs) && Array.isArray(store.typeBuckets) && Array.isArray(store.stressBuckets));
+}
+function flatPairCoords(pair){ return Array.isArray(pair) ? pair[2] : pair?.coordsFlat; }
+function flatPairTypeCode(pair){ return Array.isArray(pair) ? pair[0] : pair?.typeCode; }
+function flatPairStressCode(pair){ return Array.isArray(pair) ? pair[1] : pair?.stressCode; }
+function flatPairSegmentCount(pair){
+  const coords = flatPairCoords(pair);
+  return coords?.length ? Math.floor(coords.length / 4) : 0;
+}
+function buildFlatSegmentIndex(coords, scale){
+  if (!coords?.length) return Promise.resolve({ cells:new Map(), coords, count:0, cellSize:SPATIAL_INDEX_CELL_DEG, scale });
+  const cached = flatSegmentIndexes.get(coords);
+  if (cached) return Promise.resolve(cached);
+  const building = flatSegmentIndexBuilds.get(coords);
+  if (building) return building;
+  const idx = { cells:new Map(), coords, count:Math.floor(coords.length / 4), cellSize:SPATIAL_INDEX_CELL_DEG, scale };
+  let offset = 0;
+  const batchOffsets = Math.max(4000, SPATIAL_INDEX_BUILD_BATCH * 4);
+  const promise = new Promise(resolve => {
+    function step(){
+      const end = Math.min(coords.length, offset + batchOffsets);
+      for (; offset < end; offset += 4) {
+        const lat = ((coords[offset] || 0) + (coords[offset + 2] || 0)) / (2 * scale);
+        const lng = ((coords[offset + 1] || 0) + (coords[offset + 3] || 0)) / (2 * scale);
+        const key = cellKey(lat, lng, idx.cellSize);
+        let bucket = idx.cells.get(key);
+        if (!bucket) idx.cells.set(key, bucket = []);
+        bucket.push(offset);
+      }
+      if (offset < coords.length) requestAnimationFrame(step);
+      else {
+        flatSegmentIndexes.set(coords, idx);
+        flatSegmentIndexBuilds.delete(coords);
+        resolve(idx);
+      }
+    }
+    step();
+  });
+  flatSegmentIndexBuilds.set(coords, promise);
+  return promise;
+}
+function queryFlatSegmentIndex(idx, bounds, cap=Infinity){
+  const buckets = [];
+  let total = 0;
+  if (!idx?.cells?.size) return { offsets:[], total:0, capped:false };
+  const cs = idx.cellSize || SPATIAL_INDEX_CELL_DEG;
+  const minX = Math.floor(bounds.south / cs), maxX = Math.floor(bounds.north / cs);
+  const minY = Math.floor(bounds.west / cs), maxY = Math.floor(bounds.east / cs);
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const bucket = idx.cells.get(`${x},${y}`);
+      if (bucket?.length) { buckets.push(bucket); total += bucket.length; }
+    }
+  }
+  if (!total) return { offsets:[], total:0, capped:false };
+  if (!Number.isFinite(cap) || total <= cap) {
+    const offsets = [];
+    buckets.forEach(bucket => { for (let i = 0; i < bucket.length; i++) offsets.push(bucket[i]); });
+    return { offsets, total, capped:false };
+  }
+  const offsets = [];
+  const step = total / cap;
+  let seen = 0, next = 0;
+  for (const bucket of buckets) {
+    for (let i = 0; i < bucket.length; i++, seen++) {
+      if (seen >= next && offsets.length < cap) {
+        offsets.push(bucket[i]);
+        next += step;
+      }
+    }
+  }
+  return { offsets, total, capped:true };
+}
+function flatLinesFromOffsets(coords, offsets, scale){
+  const lines = new Array(offsets.length);
+  for (let i = 0; i < offsets.length; i++) {
+    const o = offsets[i];
+    lines[i] = [[coords[o] / scale, coords[o + 1] / scale], [coords[o + 2] / scale, coords[o + 3] / scale]];
+  }
+  return lines;
+}
+async function drawFlatPairAsync(store, pair, options, layer, overlay, token, kind, bucket, notes){
+  const coords = flatPairCoords(pair);
+  if (!coords?.length) return null;
+  const scale = Number(store.scale) || 10000000;
+  const idx = await buildFlatSegmentIndex(coords, scale);
+  if (token !== viewportRenderToken) return null;
+  const visible = queryFlatSegmentIndex(idx, paddedMapBounds(), visibleLineCap(kind, bucket));
+  if (visible.capped) notes.capped = true;
+  if (visible.offsets.length) addDynamicPolyline(flatLinesFromOffsets(coords, visible.offsets, scale), options, layer, overlay);
+  return visible;
+}
+function optimizedPairsForType(store, bucket){
+  const code = store.typeBuckets.indexOf(bucket);
+  if (code < 0) return [];
+  return store.pairs.filter(pair => flatPairTypeCode(pair) === code);
+}
+function optimizedPairsForStress(store, bucket){
+  const code = store.stressBuckets.indexOf(bucket);
+  if (code < 0) return [];
+  return store.pairs.filter(pair => flatPairStressCode(pair) === code);
+}
+async function drawOptimizedTypeBucketsAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedCityLines(store)) return;
+  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const z = map?.getZoom?.() || 10;
+  for (const [k,c,r] of defs) {
+    if (token !== viewportRenderToken) return;
+    const pairs = optimizedPairsForType(store, k);
+    if (!pairs.length) continue;
+    if (z < minZoomForTypeBucket(k)) { notes.hiddenDetail = true; continue; }
+    for (const pair of pairs) {
+      if (token !== viewportRenderToken) return;
+      await drawFlatPairAsync(store, pair, { color:c, baseWeight:r, opacity:.65 }, layer, overlay, token, 'type', k, notes);
+    }
+  }
+}
+async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedCityLines(store)) return;
+  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  for (const [k,c,r] of defs) {
+    if (token !== viewportRenderToken) return;
+    const pairs = optimizedPairsForStress(store, k);
+    for (const pair of pairs) {
+      if (token !== viewportRenderToken) return;
+      await drawFlatPairAsync(store, pair, { color:c, baseWeight:r, opacity:.62 }, layer, overlay, token, 'stress', k, notes);
+    }
+  }
+}
+function routeWeight(flow){ return Math.max(1, Math.log(flow || 1) * 1.2); }
+function routeWeightBin(weight){
+  if (weight < 1.5) return 1;
+  if (weight < 2.3) return 2;
+  if (weight < 3.3) return 3;
+  if (weight < 4.8) return 4.2;
+  return 6;
+}
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
 function formatCoordinateAddressLabel(value, decimals=4){
   const raw = String(value || '').trim();
@@ -1085,15 +1395,24 @@ function syncModeButtons(){
 }
 function selectDataset(id){ state.currentId = id; state.autoFitPending = true; updateLoadedDatasetButtons(); render(); }
 function setMode(mode){ state.mode = mode; state.autoFitPending = true; syncModeButtons(); rebuildSelect(); render(); }
-function setFocus(f){ state.focus=f; ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f)); render(); }
-function setAddressView(v){ state.addressView=v; ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v)); render(); }
-function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); render(); }
-function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); render(); }
+function setFocus(f){
+  state.focus=f;
+  ['infra','balanced','dest'].forEach(x=>document.getElementById(`focus-${x}`).classList.toggle('active', x===f));
+  if (state.mode === 'address') updateStats(currentMetrics());
+  else scheduleRender(80);
+}
+function setAddressView(v){
+  state.addressView=v;
+  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
+  renderViewportDependentLayers();
+}
+function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); scheduleRender(80); }
+function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); scheduleRender(80); }
 function setTolerance(v){
   state.tolerance=String(v);
   document.getElementById('tolLabel').textContent=String(v)==='25' ? '25 (default)' : v;
   clearTimeout(toleranceTimer);
-  toleranceTimer = setTimeout(render, 150);
+  toleranceTimer = setTimeout(render, 220);
 }
 function toggleOverlay(name){
   state.overlays[name]=!state.overlays[name];
@@ -1161,13 +1480,13 @@ function currentMetrics(){
 function render(){
   resetLayers();
   const ds = activeDataset();
-  if (!ds) { updateStats(null); return; }
+  if (!ds) { updateStats(null); document.getElementById('legend').innerHTML = ''; return; }
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
   if (ds.kind === 'address') drawAddress(data, m); else drawCity(data, m);
-  drawOverlays(data, m);
   state.autoFitPending = false;
+  renderViewportDependentLayers();
 }
 
 function updateStats(m){
@@ -1206,8 +1525,6 @@ function drawAddress(data, m){
   if (c) { L.marker([c.lat, c.lng]).bindPopup(data.addressInput || 'Start address').addTo(layers.points); if (state.autoFitPending) map.setView([c.lat,c.lng], 12); }
   if (!m) return;
   drawHull(m);
-  if (state.addressView === 'gradient') drawGradient(m.lines?.gradient, layers.main);
-  if (state.addressView === 'routes') drawRoutes(m.flowLines, layers.main);
   drawReachPoints(m);
 }
 
@@ -1348,10 +1665,36 @@ function drawGradient(buckets, layer, overlay=false){
     if(lines?.length) addDynamicPolyline(lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay);
   });
 }
+async function drawGradientAsync(buckets, layer, overlay, token, notes){
+  for (let i = 0; i < (buckets || []).length; i++) {
+    if (token !== viewportRenderToken) return;
+    const lines = buckets[i];
+    if (!lines?.length) continue;
+    await drawLineBucketAsync(lines, { color:`hsl(${120-i*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay, token, 'addressGradient', `gradient-${i}`, notes);
+  }
+}
 function drawRoutes(lines, layer, overlay=false){
+  const groups = new Map();
   (lines||[]).forEach(l => {
-    if(l.seg) addDynamicPolyline(l.seg, { color:'#16a34a', baseWeight:Math.max(1, Math.log(l.flow||1)*1.2), opacity:.55 }, layer, overlay);
+    if(!l.seg) return;
+    const w = routeWeightBin(routeWeight(l.flow));
+    if (!groups.has(w)) groups.set(w, []);
+    groups.get(w).push(l.seg);
   });
+  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
+}
+async function drawRoutesAsync(lines, layer, overlay, token, notes){
+  const result = await visibleItemsForLines(lines || [], token, 'addressRoutes', 'routes', item => item?.seg);
+  if (!result || token !== viewportRenderToken) return;
+  if (result.capped) notes.capped = true;
+  const groups = new Map();
+  result.selected.forEach(l => {
+    if(!l?.seg) return;
+    const w = routeWeightBin(routeWeight(l.flow));
+    if (!groups.has(w)) groups.set(w, []);
+    groups.get(w).push(l.seg);
+  });
+  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -1375,52 +1718,95 @@ function cityRankDisclaimer(data){
   return noteBlock('Ranking note', `Because ${Math.round(100 * best / scores.length)}% of calculated points are within a 5 point range, treat these rankings with a grain of salt.`);
 }
 
-function drawOverlays(data, m){
+async function renderViewportDependentLayers(){
+  const token = ++viewportRenderToken;
+  clearViewportDynamicLayers();
+  const ds = activeDataset();
+  if (!ds) return;
+  const data = ds.data;
+  const m = currentMetrics();
   const keys = [];
+  const notes = { capped:false, hiddenDetail:false };
   const pointKey = cityPointKey();
   if (pointKey) keys.push(pointKey);
   const rankNote = cityRankDisclaimer(data);
   if (rankNote) keys.push(rankNote);
+  if (hasViewportDependentLayers()) {
+    keys.push(noteBlock('Performance mode', 'Large line and point layers are drawn near the current map view, with reduced detail when zoomed far out. Pan or zoom, then pause briefly to refresh nearby detail.'));
+    document.getElementById('legend').innerHTML = keys.join('') + noteBlock('Rendering', 'Updating visible map detail…');
+  } else {
+    document.getElementById('legend').innerHTML = keys.join('');
+  }
 
+  if (ds.kind === 'address' && m) {
+    if (state.addressView === 'gradient') await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+    if (state.addressView === 'routes') await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
+  }
+
+  await drawOverlaysAsync(data, m, token, keys, notes);
+  if (token !== viewportRenderToken) return;
+  if (notes.hiddenDetail) keys.push(noteBlock('Low-priority detail hidden', 'Walking, service, crossings, or very dense points are held back until you zoom in more.'));
+  if (notes.capped) keys.push(noteBlock('Detail capped', 'Some dense layers are sampled at this zoom level. Zoom in for more complete detail.'));
+  document.getElementById('legend').innerHTML = keys.join('');
+}
+
+async function drawOverlaysAsync(data, m, token, keys, notes){
+  const optimizedCityLines = validOptimizedCityLines(data.cityLineSegments) ? data.cityLineSegments : null;
   if (state.overlays.type) {
     const c = data.cityLines?.classification;
-    if (state.mode === 'city' && c) drawTypeBuckets(c, layers.type, true);
-    if (state.mode === 'address' && m?.lines?.classification) drawTypeBuckets(m.lines.classification, layers.type, true);
+    if (state.mode === 'city' && optimizedCityLines) await drawOptimizedTypeBucketsAsync(optimizedCityLines, layers.type, true, token, notes);
+    else if (state.mode === 'city' && c) await drawTypeBucketsAsync(c, layers.type, true, token, notes);
+    if (token !== viewportRenderToken) return;
+    if (state.mode === 'address' && m?.lines?.classification) await drawTypeBucketsAsync(m.lines.classification, layers.type, true, token, notes);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
   if (state.overlays.stress) {
     const cityStress = data.cityLines?.stress;
     const addrStress = m?.lines?.stress;
-    if (state.mode === 'city' && cityStress) drawStressBuckets(cityStress, layers.stress, true);
-    if (state.mode === 'address' && addrStress) drawStressBuckets(addrStress, layers.stress, true);
+    if (state.mode === 'city' && optimizedCityLines) await drawOptimizedStressBucketsAsync(optimizedCityLines, layers.stress, true, token, notes);
+    else if (state.mode === 'city' && cityStress) await drawStressBucketsAsync(cityStress, layers.stress, true, token, notes);
+    if (token !== viewportRenderToken) return;
+    if (state.mode === 'address' && addrStress) await drawStressBucketsAsync(addrStress, layers.stress, true, token, notes);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
-  if (state.overlays.dest) {
-    const pois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-    const bikeParkingVisible = shouldDrawBikeParking();
-    let bikeParkingHidden = 0;
-    pois.forEach(p => {
-      const isBikeParking = isBikeParkingPoi(p);
-      if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
-      const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
-        .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
-        .addTo(layers.dest);
-    });
-    if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
-    keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
-  }
-  if (state.overlays.bad) {
-    const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-    pts.forEach(p => {
-      const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
-      L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
-        .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
-        .addTo(layers.bad);
-    });
-    keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
-  }
-  document.getElementById('legend').innerHTML = keys.join('');
+  if (state.overlays.dest) drawDestinationsOverlay(data, m, keys, notes);
+  if (state.overlays.bad) drawBadOverlay(data, m, keys, notes);
+}
+function drawDestinationsOverlay(data, m, keys, notes){
+  const rawPois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
+  const bounds = paddedMapBounds();
+  const bikeParkingVisible = shouldDrawBikeParking();
+  let bikeParkingHidden = 0;
+  const visible = [];
+  rawPois.forEach(p => {
+    const isBikeParking = isBikeParkingPoi(p);
+    if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
+    if (pointLikeInBounds(p, bounds)) visible.push(p);
+  });
+  const selected = sampleItems(visible, pointCap('dest'));
+  if (visible.length > selected.length) notes.capped = true;
+  selected.forEach(p => {
+    const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
+    L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
+      .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
+      .addTo(layers.dest);
+  });
+  if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
+  keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
+}
+function drawBadOverlay(data, m, keys, notes){
+  const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
+  const bounds = paddedMapBounds();
+  const visible = pts.filter(p => pointLikeInBounds(p, bounds));
+  const selected = sampleItems(visible, pointCap('bad'));
+  if (visible.length > selected.length) notes.capped = true;
+  selected.forEach(p => {
+    const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+    L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
+      .bindPopup(`Penalty: ${fmtSig(pen,1)}`)
+      .addTo(layers.bad);
+  });
+  keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
 }
 function cityPointKey(){
   if (state.mode !== 'city' || state.pointsView !== 'rank') return '';
@@ -1435,10 +1821,26 @@ function keyBlock(title, items){
 function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
+async function drawStressBucketsAsync(b, layer, overlay, token, notes){
+  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  for (const [k,c,r] of defs) {
+    if (token !== viewportRenderToken) return;
+    if(b[k]?.length) await drawLineBucketAsync(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay, token, 'stress', k, notes);
+  }
+}
 function drawStressBuckets(b, layer, overlay=false){
   [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
   });
+}
+async function drawTypeBucketsAsync(b, layer, overlay, token, notes){
+  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const z = map?.getZoom?.() || 10;
+  for (const [k,c,r] of defs) {
+    if (token !== viewportRenderToken) return;
+    if (z < minZoomForTypeBucket(k)) { if (b[k]?.length) notes.hiddenDetail = true; continue; }
+    if(b[k]?.length) await drawLineBucketAsync(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay, token, 'type', k, notes);
+  }
 }
 function drawTypeBuckets(b, layer, overlay=false){
   [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
@@ -1526,6 +1928,7 @@ window.addEventListener('load', () => {
   const gateShown = showMobileWarningIfNeeded();
   if (!gateShown) startViewerOnce();
 });
+
 </script>
 </body>
 </html>
