@@ -1246,6 +1246,282 @@
           padding-left: 18px !important;
         }      }
 
+
+      /* ===== Bottom information section polish for v1.9.16 ===== */
+      .bottom-info-section {
+        padding: 26px !important;
+        background-color: #cce0ff !important;
+        border: none !important;
+        border-radius: 18px !important;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06) !important;
+        text-align: left !important;
+        max-width: 2300px;
+        margin: 40px auto 20px auto !important;
+        box-sizing: border-box;
+      }
+
+      .bottom-info-inner {
+        max-width: 1500px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+      }
+
+      .bottom-info-card,
+      .methodology-box,
+      #more-info-box {
+        background: #e6f2ff !important;
+        border: 1px solid #9bc2ff !important;
+        border-radius: 14px !important;
+        box-shadow: 0 6px 18px rgba(15, 23, 42, 0.045) !important;
+        color: #334155 !important;
+        box-sizing: border-box;
+      }
+
+      .overview-text,
+      .methodology-text,
+      #more-info-box {
+        line-height: 1.65 !important;
+        font-size: 1rem !important;
+      }
+
+      .overview-text {
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 22px 24px !important;
+        text-align: left !important;
+      }
+
+      .overview-text h2,
+      #more-info-box h3,
+      .methodology-text h3 {
+        color: #0f172a !important;
+        letter-spacing: -0.02em;
+      }
+
+      .overview-text h2 {
+        margin: 0 0 12px 0 !important;
+        font-size: 1.45rem !important;
+        line-height: 1.2 !important;
+      }
+
+      .overview-text p,
+      .methodology-text p,
+      .methodology-text li,
+      #more-info-box p,
+      #more-info-box li {
+        color: #334155 !important;
+        font-size: 1rem !important;
+        line-height: 1.65 !important;
+      }
+
+      .beta-note {
+        margin: 18px 0 0 0 !important;
+        padding: 14px 16px !important;
+        background-color: #f6fbff !important;
+        border: 1px solid #b7d2ff !important;
+        border-left: 5px solid #0d6efd !important;
+        border-radius: 12px !important;
+      }
+
+      .methodology-box {
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden;
+      }
+
+      .methodology-box details {
+        cursor: pointer;
+      }
+
+      .methodology-box summary {
+        padding: 17px 20px !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+        font-size: 1.25rem !important;
+        line-height: 1.2 !important;
+        outline: none;
+        list-style: none !important;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        background: #dcecff;
+      }
+
+      .methodology-box summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .methodology-box summary::after {
+        content: "+";
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #0d6efd;
+        border: 1px solid #9bc2ff;
+        font-weight: 800;
+        flex: 0 0 auto;
+      }
+
+      .methodology-box details[open] summary::after {
+        content: "−";
+      }
+
+      .methodology-text {
+        margin-top: 0 !important;
+        padding: 20px 24px 24px 30px !important;
+        border-top: 1px solid #b7d2ff;
+        color: #334155 !important;
+      }
+
+      .methodology-text h3 {
+        margin-top: 26px !important;
+        margin-bottom: 8px !important;
+        font-size: 1.2rem !important;
+      }
+
+      .methodology-text h3:first-child {
+        margin-top: 0 !important;
+      }
+
+      .methodology-text strong,
+      #more-info-box strong {
+        color: #0f172a !important;
+      }
+
+      .methodology-text ul,
+      #more-info-box ul {
+        background: #f6fbff;
+        border: 1px solid #b7d2ff;
+        border-radius: 12px;
+        padding: 12px 18px 12px 34px !important;
+      }
+
+      .methodology-text li,
+      #more-info-box li {
+        margin-bottom: 6px;
+      }
+
+      .methodology-text li:last-child,
+      #more-info-box li:last-child {
+        margin-bottom: 0;
+      }
+
+      #more-info-box {
+        max-width: none !important;
+        margin: 0 !important;
+        padding: 22px 24px !important;
+      }
+
+      #more-info-box h3 {
+        margin: 0 0 12px 0 !important;
+        font-size: 1.25rem !important;
+      }
+
+      #more-info-box a,
+      .overview-text a {
+        color: #0d6efd !important;
+        text-decoration: none;
+        font-weight: 700;
+      }
+
+      #more-info-box a:hover,
+      .overview-text a:hover {
+        text-decoration: underline;
+      }
+
+      .donation-actions {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+      }
+
+      .donation-actions a {
+        display: inline-block;
+        background-color: #003087;
+        color: white;
+        padding: 10px 24px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 700;
+        box-shadow: 0 4px 10px rgba(0, 48, 135, 0.18);
+        transition:
+          background-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+      }
+
+      .donation-actions a:hover {
+        background-color: #00256a;
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px rgba(0, 48, 135, 0.22);
+      }
+
+      @media (max-width: 839px) {
+        .bottom-info-section {
+          padding: 14px !important;
+          margin: 24px auto 14px auto !important;
+          border-radius: 14px !important;
+        }
+
+        .bottom-info-inner {
+          gap: 12px;
+        }
+
+        .overview-text,
+        #more-info-box {
+          padding: 15px !important;
+          font-size: 0.82rem !important;
+          line-height: 1.4 !important;
+        }
+
+        .overview-text h2,
+        #more-info-box h3 {
+          font-size: 1.05rem !important;
+          line-height: 1.2 !important;
+        }
+
+        .beta-note {
+          padding: 12px !important;
+        }
+
+        .methodology-box summary {
+          padding: 14px 15px !important;
+          font-size: 1.05rem !important;
+          line-height: 1.2 !important;
+        }
+
+        .methodology-text {
+          padding: 15px 15px 18px 20px !important;
+          font-size: 0.82rem !important;
+          line-height: 1.4 !important;
+        }
+
+        .methodology-text p,
+        .methodology-text li {
+          font-size: 0.82rem !important;
+          line-height: 1.4 !important;
+        }
+
+        .methodology-text h3 {
+          font-size: 0.98rem !important;
+          line-height: 1.25 !important;
+        }
+
+        .methodology-text ul,
+        #more-info-box ul {
+          padding-left: 28px !important;
+        }
+      }
+
       .hidden {
         display: none !important;
       }
@@ -1373,7 +1649,7 @@
                 <span class="sub-label">Lower Accuracy<br />Cities</span>
                 <div
                   class="checkbox-wrapper"
-                  title="Include cities that have less complete OpenStreetMap data, or are lacking good borders for analysis. An asterisk means large rural areas have been excluded, and a name in brackets is the region that was actually analyzed for when city borders are missing. (For missing data, infrastructure data such as speed limits and surface quality is approximated, missing destinations are completely missing from the analysis. So these are likely underscored on destinations, and sometimes a little underscored on infrastructure as well.)"
+                  title="Include cities that have less complete OpenStreetMap data, or are lacking good borders for analysis. An asterisk means large rural areas have been excluded, and a name in brackets is the region that was actually analyzed for when city borders are missing. (For missing data, infrastructure data such as speed limits and surface quality is approximated, missing destinations are completely missing from the analysis. So these are likely under-scored on destinations, and sometimes a little under-scored on infrastructure as well.)"
                 >
                   <input
                     type="checkbox"
@@ -1386,7 +1662,7 @@
 
               <div class="control-item">
                 <span class="sub-label">Subdivisions</span>
-                <div class="checkbox-wrapper" title="Include subdivisions of the largest division ran (can be neighborhoods, boroughs, or tiny city propers). The city it is a subdivision of is in parentheses.">
+                <div class="checkbox-wrapper" title="Include subdivisions of the largest division analyzed (can be neighborhoods, boroughs, or tiny city propers). The city it is a subdivision of is in parentheses.">
                   <input
                     type="checkbox"
                     id="includeSubdivisions"
@@ -1454,7 +1730,7 @@
                   </button>
                   <button
                     onclick="setMapLevel('State')"
-                    title="Some countries broken down by their highest scoring city in each region (it's oomplicated to add regional breakdowns, so only countries with 10+ cities included are supported for now)."
+                    title="Some countries broken down by their highest scoring city in each region (it's complicated to add regional breakdowns, so only countries with the most included cities are supported for now)."
                   >
                     Region
                   </button>
@@ -2311,9 +2587,9 @@
 		  "Bike Parking":
 			"This measures the number of bike parking locations reachable by the average resident.",
 		  "Destination Score":
-			"This measures the number of destinations and bike parking locations reachable by the average resident, weighted. (For example, bike shops are hight weight, grocery stores are medium weight, and bike parking is low weight.)",
+			"This measures the number of destinations and bike parking locations reachable by the average resident, weighted. (For example, bike shops are high weight, grocery stores are medium weight, and bike parking is low weight.)",
 		  "Bad Ints/mi":
-			"This measures the estimate number of higher risk intersections (based on speed limits, intersection controls, and if there is bike infrastructure), divided by the Total Network. Lower numbers tend to mean safer intersections.",
+			"This measures the estimated number of higher risk intersections (based on speed limits, intersection controls, and if there is bike infrastructure), divided by the Total Network. Lower numbers tend to mean safer intersections.",
 		  "Furthest Reach #1 (mi)":
 			"This measures how far away the average resident can comfortably bike.",
 		  "Furthest Reach #2 (mi)":
@@ -2344,9 +2620,9 @@
 			focusDisp:
 			  "Focus Disparities shows whether a city performs better for infrastructure/recreation or destinations/transportation. Infra Heavy shows cities that scored higher for their infrastructure focused score, while Dest Heavy shows cities that scored higher for their destination focused score.",
 			pfb:
-			  "PFB Rankings compares how this index's rankings comapare to those of PeopleForBikes's city score rankings of 270 cities in this index. Overrated shows cities PeopleForBikes rated higher, while Underrated showes cities this index rates higher.",
+			  "PFB Rankings compares how this index's rankings compare to those of PeopleForBikes's city score rankings of 270 cities in this index. Overrated shows cities PeopleForBikes rated higher, while Underrated shows cities this index rates higher.",
 			copenhagen:
-			  "Copenhagen Rankings compares how this index's rankings comapare to those of the Copenhagenize Index's city infrastructure rankings of 100 cities. Overrated shows cities the Copenhagenize Index rated higher, while Underrated showes cities this index rates higher.",
+			  "Copenhagen Rankings compares how this index's rankings compare to those of the Copenhagenize Index's city infrastructure rankings of 100 cities. Overrated shows cities the Copenhagenize Index rated higher, while Underrated shows cities this index rates higher.",
 		  };
 
 		  return helpText[type] || "";
@@ -5250,310 +5526,130 @@
       }
     </script>
 
-    <div
-	  class="bottom-info-section"
-      style="
-        padding: 25px;
-        background-color: #cce0ff;
-        border-radius: 16px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
-        text-align: center;
-        max-width: 2300px;
-        margin: 40px auto 20px auto;
-      "
-    >
-      <div
-        class="overview-text"
-		style="
-          max-width: 1500px;
-          margin: 0 auto 20px auto;
-          text-align: left;
-          color: #444;
-          line-height: 1.6;
-          font-size: 1rem;
-        "
-      >
-        <h2
-          style="
-            color: #333;
-            font-size: 1.5rem;
-            margin-bottom: 10px;
-            margin-top: 0;
-          "
-        >
-          Overview: The Bike Friendliness Index
-        </h2>
-        <p style="margin-bottom: 10px">
-          The Bike Friendliness Index estimates how easy it is to get around by bike in hundreds of communities around the world. It uses OpenStreetMap data on roads, bike infrastructure, and destinations cyclists may want to reach to estimate how well each community’s bike network allows cyclists to comfortably go where they want to go.
-		  </p>
-        <p style="margin-bottom: 10px">
-		Other bikeability ratings tend to focus on cities famous for biking, or only compare cities within a specific country. Most also treat city limits like hard walls and don't measure how well infrastructure connects to destinations and the rest of the bike network. That can miss what riding in a smaller or slightly less biking friendly city actually feels like. 
-		  This index is built to work across many communities using publicly available data, while estimating how far someone can realistically bike without relying too much on stressful or risky riding.
-        </p>
-        <p style="margin-bottom: 15px">
-          Because bikeability depends on why you ride and what you are comparing, each location gets several types of scores. Infrastructure Focus emphasizes recreational biking, Destination Focus emphasizes transportation and errands, and Balanced Focus weighs both equally.
-		  Scores are also shown as “City Wide” and “Best Area.” City Wide averages the quality of the cycling network at many points across the city. Looking at the whole city is the traditional way to score cities, but City Wide 
-		  differs because it includes easy to access infrastructure and destinations outside of city limits as well. "Best Area" takes things one step further and only averages the higher scoring areas, which helps to avoid penalizing 
-		  cities just because their official borders include large car dependent suburban/rural areas that most people would not choose when looking for a bike friendly neighborhood. Best Area also is a more useful metric when deciding where to live.
-        </p>
+    <div class="bottom-info-section">
+      <div class="bottom-info-inner">
+        <div class="bottom-info-card overview-text">
+          <h2>Overview: The Bike Friendliness Index</h2>
+          <p style="margin-bottom: 10px">
+            The Bike Friendliness Index estimates how easy it is to get around by bike in hundreds of communities around the world. It uses OpenStreetMap data on roads, bike infrastructure, and destinations cyclists may want to reach to estimate how well each community’s bike network allows cyclists to comfortably go where they want to go.
+          </p>
+          <p style="margin-bottom: 10px">
+            Other bikeability ratings tend to focus on cities famous for biking, or only compare cities within a specific country. Most also treat city limits like hard walls and don't measure how well infrastructure connects to destinations and the rest of the bike network. That can miss what riding in a smaller or slightly less bike-friendly city actually feels like. This index is built to work across many communities using publicly available data, while estimating how far someone can realistically bike without relying too much on stressful or risky riding.
+          </p>
+          <p style="margin-bottom: 15px">
+            Because bikeability depends on why you ride and what you are comparing, each location gets several types of scores. Infrastructure Focus emphasizes recreational biking, Destination Focus emphasizes transportation and errands, and Balanced Focus weighs both equally. Scores are also shown as “City Wide” and “Best Area.” City Wide averages the quality of the cycling network at many points across the city. Looking at the whole city is the traditional way to score cities, but City Wide differs because it includes easy-to-access infrastructure and destinations outside of city limits as well. "Best Area" takes things one step further and only averages the higher scoring areas, which helps to avoid penalizing cities just because their official borders include large car-dependent suburban/rural areas that most people would not choose when looking for a bike-friendly neighborhood. Best Area also is a more useful metric when deciding where to live.
+          </p>
 
-        <p
-          style="
-            margin-bottom: 0;
-            padding: 15px;
-            background-color: #e6f0ff;
-            border-radius: 8px;
-            border-left: 4px solid #0d6efd;
-          "
-        >
-          This was a lot of work, so I hope you enjoy! This site is still a work in progress as I tweak things and add new locations. If you have any suggestions or questions, feel free to contact me at
+          <p class="beta-note">
+            This was a lot of work, so I hope you enjoy! This site is still a work in progress as I tweak things and add new locations. If you have any suggestions or questions, feel free to contact me at
+            <a href="mailto:comments@bikefriendlinessindex.org">comments@bikefriendlinessindex.org</a>. Check out the Methodology to see more in depth how the program works, and check out "Want To See More?" to see the full power of the analysis program for localized insights. <a href="https://momentummag.com/where-should-you-live-if-you-bike-everywhere-one-engineer-built-a-bike-friendliness-tool-to-find-out/" target="_blank" rel="noopener">Thank you to Momentum Mag for the coverage</a>.
+          </p>
+        </div>
+
+        <div class="methodology-box">
+          <details style="cursor: pointer">
+            <summary>📊 Methodology (Click to expand)</summary>
+
+            <div class="methodology-text">
+              <h3>How the Index Works</h3>
+
+              <p style="margin-top: 10px">
+                <strong>The Inspiration</strong><br />
+                This project started with a simple problem: I wanted to find a genuinely bikeable place to live. I was disappointed with existing bikeability ratings because they typically focus on a select few very bike-friendly cities, or focus on a single country. Additionally, if they evaluate infrastructure at all, they tend to look strictly within municipal borders. That can miss what biking somewhere is actually like. For example, a quiet neighborhood with minimal internal infrastructure might sit directly adjacent to a world-class, multi-city trail system. To address these blind spots, this tool tries to measure what it is actually like to get around a community you live in by bike.
+              </p>
+
+              <p>
+                <strong>Data Sourcing</strong><br />
+                The index is built from crowdsourced OpenStreetMap (OSM) data collected through the Overpass API. Beyond just roads and paths, all relevant data is collected, from speed limits to intersection signage to path surface materials. By compiling this raw data, the tool builds a complete graph of the local cycling network.
+              </p>
+
+              <p>
+                <strong>Stress Scoring</strong><br />
+                With the network graph, the algorithm assigns a stressfulness penalty to every segment, with over a dozen possible penalties factored in. High-speed arterials receive severe penalties, while painted lanes reduce stress, and protected cycleways are considered extremely low stress. It also estimates the danger of an intersection based on speed limits and how it is controlled, factoring that into the cumulative stress.
+              </p>
+
+              <p>
+                <strong>Pathfinding</strong><br />
+                The core simulation uses Dijkstra's algorithm to model a cyclist's journey outward from a starting node. The tool attempts to simulate riding in all possible directions, measuring the stress along the way. If the cumulative stress of navigating fast traffic, dangerous intersections, or poor surfaces exceeds this limit, the path is cut off. This is used to calculate several metrics, such as how far a cyclist can travel in a single direction and what percent of their route is bike infrastructure. While all paths start inside the city, they may leave the city while simulating the cycling, incorporating data that alternatives do not.
+              </p>
+
+              <p>
+                <strong>Destination Value and Amenity Scoring</strong><br />
+                A safe bike network is only as good as the places it connects. The tool cross-references the safely reachable network with a database of local Points of Interest (POIs). Amenities are weighted by how important they are likely to be to the average cyclist: grocery stores, schools, transit hubs, and bike shops carry heavy weight, while restaurants and parks offer moderate value, and a car mechanic is completely excluded. By prioritizing locations that serve daily livability over tourist destinations, the tool outputs a "Destination Score" that quantifies the practical utility of the local network.
+              </p>
+
+              <p>
+                <strong>Scoring</strong><br />
+                Because bikeability means different things to different people, the program generates nine distinct scores for every city. It uses three weightings: Infrastructure prioritized (for recreational riding), Destination prioritized (for commuting and errands), and a Balanced approach. It applies these across three scopes: a traditional City Wide average, a Best Area score (highlighting the top 20% most bikeable neighborhoods), and a High Point score (the 95th percentile, as the highest point or two can sometimes be an unrealistic living location). There is an “Address Mode” where you can score any single address, and the main "City Mode," that runs dozens to hundreds of Address Mode calculations spread out across the city and averages the scores together.
+              </p>
+
+              <p>
+                <strong>Contextual Accuracy in Practice</strong><br />
+                The strengths of the methodology are visible when comparing locations on alternative indexes. For instance, Mackinac Island (a small tourist town that bans cars) scores a perfect 100 on other indexes, while a small inner suburb like Grandview Heights, Ohio scores poorly due to minimal bike-specific infrastructure within the suburb. However, Mackinac Island has very few amenities, limiting practical daily living. On the other hand, Grandview Heights borders a world-class, grade-separated path offering stress-free cycling to a major downtown, university, and surrounding suburbs, making the suburb more practical for the typical cyclist.
+              </p>
+
+              <h3>Map, Graph, and List Modes</h3>
+              <p>
+                To make this massive dataset accessible, this site currently visualizes data for many of the analyzed communities, with a focus on cities with at least 200,000 people. You can explore the findings using three distinct viewing modes:
+              </p>
+              <ul style="margin-top: 5px">
+                <li>
+                  <strong>Map Mode:</strong> View cities geographically. You can toggle this to show only the highest-scoring city in each country for a global overview, include regions for supported countries, or display every tracked city. Hover over cities/countries for more information.
+                </li>
+                <li>
+                  <strong>Graph Mode:</strong> This plots the cities on a scatter plot, comparing their City Wide score against their Best Area score. This visually highlights which cities are consistently bikeable throughout, and which suffer from massive disparities between their best neighborhoods and their worst. Hover over points for more information. There are tools on the top right to adjust the panning and zooming.
+                </li>
+                <li>
+                  <strong>List Mode:</strong> A straightforward, sortable breakdown of the raw stats and metrics for many cities in the database.
+                </li>
+              </ul>
+
+              <h3>Limitations</h3>
+              <p>
+                The program does have some inherent limitations. Its accuracy relies heavily on the completeness of OSM data. When metadata like speed limits or surface types are missing, the algorithm must use estimates. Some cities are currently lacking full compatibility for analysis, as they do not have a boundary on OSM (such as Albuquerque and quite a few cities in developing countries) or because their boundaries are very large (a common issue particularly with Chinese cities). Additionally, because the tool just measures physical infrastructure and destinations, it cannot include cultural factors such as driver awareness, local cycling volume, or municipal policy. Variables like weather and elevation are currently excluded, although they may be possible to eventually integrate.
+              </p>
+              <p>
+                Despite these limitations, the index is one of the best ways to compare bikeability across many places around the globe.
+              </p>
+            </div>
+          </details>
+        </div>
+
+        <div id="more-info-box">
+          <h3>🗺️ Want To See More?</h3>
+          <p style="margin-top: 0; margin-bottom: 12px">
+            While the public database provides an overview of the data with a focus on cities over 200,000 in population, the Bike Friendliness Index can also process other areas or provide additional data for a location upon request. You can request the addition of any compatible city, suburb, town, neighborhood, county, or other small political region to the database. To verify compatibility, simply search your desired location using
+            <a href="https://nominatim.openstreetmap.org/ui/search.html" target="_blank">Nominatim</a>. If the search returns a polygon boundary roughly the size of a town or city, the area can be processed. If it just returns a point, a very small boundary (like the size of a house) or a very large boundary (like the size of a state), it is not currently supported. I'm currently accepting one free request per person. If you are requesting multiple locations, I ask for a donation of $5 per additional location. Email comments@bikefriendlinessindex.org with the Nominatim link(s) for the boundary/boundaries you want added, or for questions/help with this process.
+          </p>
+          <p style="margin-top: 0; margin-bottom: 8px">
+            <strong>Requesting a Custom Analysis:</strong>
+            You can request a Full City Analysis for any city currently on the map or a newly requested area. This deep dive provides all the data for the location. This includes the value for the ~2 dozen stats, both overall and for every individual calculated point (typically at least 1 point per square mile). These points can be viewed on a map to get an idea of which neighborhoods are best to live in. It also includes the comprehensive data overlays. These overlays display:
+          </p>
+          <ul style="margin: 0 0 12px 0">
+            <li>The stress designation of every street and path</li>
+            <li>The network type of every street and path</li>
+            <li>Points with the location for useful reachable destinations</li>
+            <li>The location of potentially dangerous intersections</li>
+          </ul>
+          <p style="margin-top: 0; margin-bottom: 12px">
+            You can also request an Address Analysis for any specific address or set of coordinates worldwide, regardless of boundary compatibility (provided it is adjacent to a bike-permissive road or path). Address Mode includes the four main data overlays from City Mode, plus three specialized visualizations unique to Address Analysis: a cumulative stress map detailing how difficult it is to reach surrounding areas, a tree visualization highlighting ideal corridors to take, and a boundary visualization of the total safe area within your reach.
+          </p>
+          <p style="margin-top: 0; margin-bottom: 12px">
+            Custom analyses require a moderate amount of work for me to prepare, so I ask for a donation for a Full City Analysis or Address Analysis (minimum $10 per Full City or Address Analysis) to help cover the time needed to process areas, prepare custom results, and keep the project running. If you are on a computer, you can check out a handful of sample cities at <a href="/viewer/">bikefriendlinessindex.org/viewer</a>. Email comments@bikefriendlinessindex.org with questions/requests.
+          </p>
+          <p style="margin-top: 15px; margin-bottom: 0">
+            I also greatly appreciate donations from anyone who just wants to support the project and help keep it running!
+          </p>
+        </div>
+
+        <div class="donation-actions">
           <a
-            href="mailto:comments@bikefriendlinessindex.org"
-            style="color: #0d6efd; text-decoration: none; font-weight: 600"
-            >comments@bikefriendlinessindex.org</a
-          >.
-        </p>
-      </div>
-
-      <div
-	    class="methodology-box"
-        style="
-          text-align: left;
-          max-width: 1500px;
-          margin: 0 auto 24px auto;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 8px;
-          padding: 15px 20px;
-        "
-      >
-        <details style="cursor: pointer">
-          <summary
-            style="
-              font-weight: 700;
-              color: #444;
-              font-size: 1.15rem;
-              outline: none;
-              list-style-position: inside;
-            "
-          >
-            📊 Methodology (Click to expand)
-          </summary>
-
-          <div
-		    class="methodology-text"
-            style="
-              margin-top: 15px;
-              font-size: 1rem;
-              color: #555;
-              line-height: 1.6;
-              padding-left: 25px;
-            "
-          >
-            <h3 style="margin-top: 0; color: #333; font-size: 1.25rem">
-              How the Index Works
-            </h3>
-
-            <p style="margin-top: 10px">
-              <strong style="color: #333">The Inspiration</strong><br />
-              This project started with a simple problem: I wanted to find a genuinely bikeable place to live.
-			  I was disappointed with existing bikeability ratings because they typically focus on a select few very bike friendly
-              cities, or focus on a single country. Additionally, if they evaluate infrastructure at all,
-			  they tend to look strictly within municipal borders. That can miss what biking somewhere is actually like. For example, a quiet neighborhood with
-              minimal internal infrastructure might sit directly adjacent to a world-class, multi-city trail system. To address these blind
-              spots, this tool tries to measure what it is actually like to get around a community you live in by bike.
-            </p>
-
-            <p>
-              <strong style="color: #333">Data Sourcing</strong><br />
-              The index is built from crowdsourced OpenStreetMap (OSM) data collected through the Overpass API. Beyond just roads and paths, all relevant data is collected,
-			  from speed limits to intersection signage to path surface materials. By compiling this raw data, the tool
-              builds a complete graph of the local cycling network.
-            </p>
-
-            <p>
-              <strong style="color: #333">Stress Scoring</strong><br />
-              With the network graph, the algorithm assigns a stressfulness penalty to every segment, with over a dozen possible
-              penalties factored in. High-speed arterials receive severe penalties, while painted lanes reduce stress, and protected
-              cycleways are considered extremely low stress. It also estimates the danger of an intersection based on speed limits and how it is controlled,
-              factoring that into the cumulative stress.
-            </p>
-
-            <p>
-              <strong style="color: #333">Pathfinding</strong><br />
-              The core simulation uses Dijkstra's algorithm to model a cyclist's journey outward from a starting node. The tool attempts
-              to simulate riding in all possible directions, measuring the stress along the way. If the cumulative stress of navigating fast
-              traffic, dangerous intersections, or poor surfaces exceeds this limit, the path is cut off. This is used to calculate several
-              metrics, such as how far a cyclist can travel in a single direction and what percent of their route is bike infrastructure.
-              While all paths start inside the city, they may leave the city while simulating the cycling, incorporating data that alternatives
-              do not.
-            </p>
-
-            <p>
-              <strong style="color: #333"
-                >Destination Value and Amenity Scoring</strong
-              ><br />
-              A safe bike network is only as good as the places it connects. The tool cross-references the safely reachable network with a database
-              of local Points of Interest (POIs). Amenities are weighted by how important they are likely to be to the average cyclist: grocery stores, schools, transit hubs,
-              and bike shops carry heavy weight, while restaurants and parks offer moderate value, and a car mechanic is completely excluded. By prioritizing locations that serve daily
-              livability over tourist destinations, the tool outputs a "Destination Score" that quantifies the practical utility of the local network.
-            </p>
-
-            <p>
-              <strong style="color: #333">Scoring</strong><br />
-              Because bikeability means different things to different people, the program generates nine distinct scores for every city. It uses
-              three weightings: Infrastructure prioritized (for recreational riding), Destination prioritized (for commuting and errands), and
-              a Balanced approach. It applies these across three scopes: a traditional City Wide average, a Best Area score (highlighting the
-              top 20% most bikeable neighborhoods), and a High Point score (the 95th percentile, as the highest point or two can sometimes be an
-              unrealistic living location). There is an “Address Mode” where you can score any single address, and the main "City Mode," that runs
-              dozens to hundreds of Address Mode calculations spread out across the city and averages the scores together.
-            </p>
-
-            <p>
-              <strong style="color: #333"
-                >Contextual Accuracy in Practice</strong
-              ><br />
-              The strengths of the methodology are visible when comparing locations on alternative indexes. For instance, Mackinac Island (a small tourist
-              town that bans cars) scores a perfect 100 on other indexes, while a small inner suburb like Grandview Heights, Ohio scores poorly due to minimal bike specific infrastructure within the suburb. 
-			  However, Mackinac Island has very few amenities, limiting practical daily living. On the other hand, Grandview Heights borders a world-class, grade-separated path offering stress-free cycling to a major downtown, university, and
-              surrounding suburbs, making the suburb more practical for the typical cyclist.
-            </p>
-
-            <h3 style="margin-top: 25px; color: #333; font-size: 1.25rem">
-              Map, Graph, and List Modes
-            </h3>
-            <p>
-              To make this massive dataset accessible, this site currently visualizes data for many of the analyzed communities, 
-			  with a focus on cities with at least 200,000 people. You can explore the findings using three distinct viewing modes:
-            </p>
-            <ul style="margin-top: 5px">
-              <li>
-                <strong style="color: #333">Map Mode:</strong> View cities geographically. You can toggle this to show only the
-                highest-scoring city in each country for a global overview, include regions for supported countries, or display every
-                tracked city. Hover over cities/countries for more information.
-              </li>
-              <li>
-                <strong style="color: #333">Graph Mode:</strong> This plots the cities on a scatter plot, comparing their City Wide score
-                against their Best Area score. This visually highlights which cities are consistently bikeable throughout, and which suffer
-                from massive disparities between their best neighborhoods and their worst. Hover over points for more information. There
-                are tools on the top right to adjust the panning and zooming.
-              </li>
-              <li>
-                <strong style="color: #333">List Mode:</strong> A straightforward, sortable breakdown of the raw stats and metrics
-                for many cities in the database.
-              </li>
-            </ul>
-
-            <h3 style="margin-top: 25px; color: #333; font-size: 1.25rem">
-              Limitations
-            </h3>
-            <p>
-              The program does have some inherent limitations. Its accuracy relies heavily on the completeness of OSM data. When
-              metadata like speed limits or surface types are missing, the algorithm must use estimates. Some cities are currently
-              lacking full compatibility for analysis, as they do not have a boundary on OSM (such as Albuquerque and quite a few cities 
-			  in developing countries) or because their boundaries are very large (a common issue particularly with Chinese cities). 
-			  Additionally, because the tool just measures physical infrastructure and destinations, it cannot include cultural
-              factors such as driver awareness, local cycling volume, or municipal policy. Variables like weather and elevation are
-              currently excluded, although they may be possible to eventually integrate.
-            </p>
-            <p>
-              Despite these limitations, the index is one of the best ways to compare bikeability across many places around the globe.
-            </p>
-          </div>
-        </details>
-      </div>
-
-            <div
-        id="more-info-box"
-        style="
-          text-align: left;
-          max-width: 1500px;
-          margin: 0 auto 24px auto;
-          background: #f8f9fa;
-          border: 1px solid #dee2e6;
-          border-radius: 8px;
-          padding: 15px 20px;
-          font-size: 1rem;
-          color: #555;
-          line-height: 1.6;
-        "
-      >
-        <h3 style="margin: 0 0 12px 0; color: #333; font-size: 1.25rem">
-          Want To See More?
-        </h3>
-        <p style="margin-top: 0; margin-bottom: 12px">
-          While the public database provides an overview of the data with a focus on cities over 200,000 in population, the Bike Friendliness Index can also process other areas or provide additional data for a location upon request. 
-		  You can request the addation any compatible city, suburb, town, neighborhood, county, or other small political region to the database. To verify compatibility, simply search your desired
-          location using
-          <a
-            href="https://nominatim.openstreetmap.org/ui/search.html"
+            href="https://www.paypal.com/donate/?business=JSMHLH5VXWH8G&no_recurring=0&item_name=Creator+of+the+Bike+Friendliness+Index&currency_code=USD"
             target="_blank"
-            style="color: #0066cc; text-decoration: none"
-            >Nominatim</a
-          >. If the search returns a polygon boundary roughly the size of a town or city, the area can be processed. If it just returns a point, 
-          a very small boundary (like the size of a house) or a very large boundary (like the size of a state), it is not currently supported. I'm currently accepting one free request per person. If you are requesting multiple locations, I ask for a donation of $5 per additional location.
-		  Email comments@bikefriendlinessindex.org with the Nominatim link(s) for the boundary/boundaries you want added, or for questions/help with this process.
-        </p>
-        <p style="margin-top: 0; margin-bottom: 8px">
-          <strong style="color: #333">Requesting a Custom Analysis:</strong>
-		  You can request a Full City Analysis for any city currently on the map or a newly requested area. This deep dive
-          provides all the data for the location. This includes the value for the ~2 dozen stats, both overall and for every individual calculated 
-          point (typically at least 1 point per square mile). These points can be viewed on a map to get an idea of which neighborhoods are best to live in. 
-          It also includes the comprehensive data overlays. These overlays display:
-        </p>
-        <ul
-          style="
-            margin: 0 0 12px 0;
-            padding-left: 22px;
-            line-height: 1.35;
-          "
-        >
-          <li style="margin-bottom: 4px">The stress designation of every street and path</li>
-          <li style="margin-bottom: 4px">The network type of every street and path</li>
-          <li style="margin-bottom: 4px">Points with the location for useful reachable destinations</li>
-          <li style="margin-bottom: 0">The location of potentially dangerous intersections</li>
-        </ul>
-        <p style="margin-top: 0; margin-bottom: 12px">
-          You can also request an Address Analysis for any specific address or set of coordinates worldwide, regardless of boundary compatibility (provided it is adjacent to a
-          bike-permissive road or path). Address Mode includes the four main data overlays from City Mode, plus three specialized
-          visualizations unique to Address Analysis: a cumulative stress map detailing how difficult it is to reach surrounding
-          areas, a tree visualization highlighting ideal corridors to take, and a boundary visualization of the total safe area within your reach.
-        </p>
-		<p style="margin-top: 0; margin-bottom: 12px">
-		Custom analyses require a moderate amount of work for me to prepare, so I ask for a donation for a Full City Analysis or Address Analysis (minimum $10 per Full City/Address analysis) 
-to help cover the time needed to process areas, prepare custom results, and keep the project running. Check out a few sample cities at <a href="/viewer/">bikefriendlinessindex.org/viewer</a>.
-Email comments@bikefriendlinessindex.org with questions/requests.
-		</p>
-        <p style="margin-top: 15px; margin-bottom: 0">
-          I also greatly appreciate donations from anyone who just wants to support the project!
-          
-        </p>
-      </div>
-      
-      <div
-        style="
-          display: flex;
-          justify-content: center;
-          gap: 15px;
-          flex-wrap: wrap;
-        "
-      >
-        <a
-          href="https://www.paypal.com/donate/?business=JSMHLH5VXWH8G&no_recurring=0&item_name=Creator+of+the+Bike+Friendliness+Index&currency_code=USD"
-          target="_blank"
-          style="
-            display: inline-block;
-            background-color: #003087;
-            color: white;
-            padding: 10px 24px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: 600;
-            transition: background-color 0.2s;
-          "
-        >
-          Support the Bike Friendliness Index
-        </a>
+          >
+            Support the Bike Friendliness Index
+          </a>
+        </div>
       </div>
     </div>
     <script
