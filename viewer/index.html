@@ -212,15 +212,15 @@ const SAMPLE_SET_NAME = 'BFI Viewer Beta';
 const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
 const COLUMBUS_ADDRESS_LABEL = '39.98, -83.03 (Grandview Heights, OH)';
 const SAMPLE_FILE_PATHS = [
-  'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
-  'sample-files/Helsinki_Finland.viewer-pruned.zip',
-  'sample-files/New_York_NY.viewer-pruned.zip',
-  'sample-files/Paris_France.viewer-pruned.zip',
-  'sample-files/Copenhagen_Denmark.viewer-pruned.zip',
-  'sample-files/London_United_Kingdom.viewer-pruned.zip',
-  'sample-files/Utrecht_Netherlands.viewer-pruned.zip',
-  'sample-files/Minneapolis_MN.viewer-pruned.zip',
-  'sample-files/39.98404_-83.viewer-pruned.zip'
+  'sample-files/39.98404_-83.viewer-optimized-v2.zip',
+  'sample-files/Amsterdam_Netherlands.viewer-optimized-v1.zip',
+  'sample-files/Copenhagen_Municipality_Denmark.viewer-optimized-v1.zip',
+  'sample-files/Helsinki_Finland.viewer-optimized-v1.zip',
+  'sample-files/London_United_Kingdom.viewer-optimized-v1.zip',
+  'sample-files/Minneapolis_MN.viewer-optimized-v1.zip',
+  'sample-files/New_York_NY.viewer-optimized-v1.zip',
+  'sample-files/Paris_France.viewer-optimized-v1.zip',
+  'sample-files/Utrecht_Netherlands.viewer-optimized-v1.zip'
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
 // The hosted site currently relies on the known sample files below. Keep remote discovery off by default:
@@ -236,9 +236,24 @@ const SPATIAL_INDEX_BUILD_BATCH = 45000;
 let viewportRenderToken = 0;
 const spatialIndexes = new WeakMap();
 const spatialIndexBuilds = new WeakMap();
+const MAP_MIN_ZOOM_DEFAULT = 4;
+const MAP_MIN_ZOOM_CITY = 10;
+const MAP_MIN_ZOOM_ADDRESS = 11;
+
+function currentMapMinZoom(){
+  const ds = activeDataset?.();
+  if (!ds) return MAP_MIN_ZOOM_DEFAULT;
+  return ds.kind === 'address' ? MAP_MIN_ZOOM_ADDRESS : MAP_MIN_ZOOM_CITY;
+}
+function applyMapZoomFloor({ clamp=true } = {}){
+  if (!map) return;
+  const minZoom = currentMapMinZoom();
+  if (map.options.minZoom !== minZoom) map.setMinZoom(minZoom);
+  if (clamp && map.getZoom() < minZoom) map.setZoom(minZoom, { animate:false });
+}
 
 async function initMap(){
-  map = L.map('map', { zoomControl:true, preferCanvas:true }).setView([39.8283,-98.5795], 4);
+  map = L.map('map', { zoomControl:true, preferCanvas:true, minZoom:MAP_MIN_ZOOM_DEFAULT }).setView([39.8283,-98.5795], 4);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => {
@@ -837,6 +852,7 @@ function prettifySampleLabel(name){
   return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
+    .replace(/\.viewer-optimized-v\d+$/i, '')
     .replace(/_/g, ' ')
     .trim() || name;
 }
@@ -844,7 +860,7 @@ function prettifySampleLabel(name){
 function sampleKey(entry){
   let raw = String(entry?.name || entry?.url || '').toLowerCase();
   try { raw = decodeURIComponent(raw); } catch {}
-  return raw.replace(/copenhagen_municipality_denmark\.viewer-pruned\.zip$/i, 'copenhagen_denmark.viewer-pruned.zip');
+  return raw;
 }
 
 function isLegacyCopenhagenEntry(entry){
@@ -868,7 +884,7 @@ function addSampleEntries(target, entries){
       target.set(key, entry);
     } else {
       const existing = target.get(key);
-      // Prefer the current Copenhagen filename over a stale manifest entry using the old Municipality name.
+      // Prefer a clearly labeled Copenhagen entry if discovery ever returns duplicates.
       if (isLegacyCopenhagenEntry(existing) && !isLegacyCopenhagenEntry(entry)) target.set(key, entry);
       else if (entry.label && !existing.label) existing.label = entry.label;
     }
@@ -1632,11 +1648,13 @@ function currentMetrics(){
 function render(){
   resetLayers();
   const ds = activeDataset();
-  if (!ds) { updateStats(null); document.getElementById('legend').innerHTML = ''; return; }
+  if (!ds) { applyMapZoomFloor({ clamp:false }); updateStats(null); document.getElementById('legend').innerHTML = ''; return; }
+  applyMapZoomFloor({ clamp:false });
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
   if (ds.kind === 'address') drawAddress(data, m); else drawCity(data, m);
+  applyMapZoomFloor({ clamp:true });
   state.autoFitPending = false;
   renderViewportDependentLayers();
 }
