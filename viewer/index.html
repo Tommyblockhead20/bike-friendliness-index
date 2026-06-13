@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta</title>
+  <title>BFI Viewer Beta Optimized v9</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -476,6 +476,7 @@ async function drawLineBucketAsync(items, options, layer, overlay, token, kind, 
 
 const flatSegmentIndexes = new WeakMap();
 const flatSegmentIndexBuilds = new WeakMap();
+const addressGridIndexes = new WeakMap();
 function validOptimizedCityLines(store){
   return !!(store && store.format === 'flat-pairs-v1' && Array.isArray(store.pairs) && Array.isArray(store.typeBuckets) && Array.isArray(store.stressBuckets));
 }
@@ -606,6 +607,157 @@ async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, not
     }
   }
 }
+
+function validOptimizedAddressLines(store){
+  return !!(store && store.format === 'flat-address-grid-v1' && Array.isArray(store.cells) && Array.isArray(store.tolerances));
+}
+function addressGridIndex(store){
+  if (!validOptimizedAddressLines(store)) return null;
+  const cached = addressGridIndexes.get(store);
+  if (cached) return cached;
+  const map = new Map();
+  for (const cell of store.cells) {
+    if (!Array.isArray(cell) || cell.length < 4) continue;
+    map.set(`${cell[0]},${cell[1]}`, cell);
+  }
+  const idx = { map, cellDegrees:Number(store.cellDegrees) || SPATIAL_INDEX_CELL_DEG, scale:Number(store.scale) || 10000000, store };
+  addressGridIndexes.set(store, idx);
+  return idx;
+}
+function currentAddressTolIndex(store){
+  const t = String(state.tolerance);
+  let idx = store.tolerances.indexOf(t);
+  if (idx >= 0) return idx;
+  const numeric = store.tolerances.map((v,i)=>[Math.abs((Number(v)||0)-(Number(t)||0)), i]).sort((a,b)=>a[0]-b[0]);
+  return numeric[0]?.[1] ?? 0;
+}
+function unpackTolNibble(pack, tolIdx){
+  const v = (Number(pack) >> (tolIdx * 4)) & 15;
+  return v ? v - 1 : -1;
+}
+function addressRouteBucketWeight(bucket){
+  if (bucket < 2) return 1;
+  if (bucket < 4) return 1.6;
+  if (bucket < 7) return 2.4;
+  if (bucket < 10) return 3.5;
+  if (bucket < 13) return 4.8;
+  return 6;
+}
+function queryAddressGridCells(store){
+  const idx = addressGridIndex(store);
+  if (!idx) return [];
+  const b = paddedMapBounds();
+  const cs = idx.cellDegrees || SPATIAL_INDEX_CELL_DEG;
+  const minX = Math.floor(b.south / cs), maxX = Math.floor(b.north / cs);
+  const minY = Math.floor(b.west / cs), maxY = Math.floor(b.east / cs);
+  const cells = [];
+  for (let x = minX; x <= maxX; x++) {
+    for (let y = minY; y <= maxY; y++) {
+      const cell = idx.map.get(`${x},${y}`);
+      if (cell) cells.push(cell);
+    }
+  }
+  return cells;
+}
+function collectOptimizedAddressGroups(store, mode, notes){
+  const tolIdx = currentAddressTolIndex(store);
+  const cells = queryAddressGridCells(store);
+  const scale = Number(store.scale) || 10000000;
+  const capKind = mode === 'gradient' ? 'addressGradient' : mode === 'routes' ? 'addressRoutes' : mode;
+  const cap = visibleLineCap(capKind, '');
+  const refs = [];
+  let total = 0;
+  const z = map?.getZoom?.() || 10;
+
+  for (const cell of cells) {
+    const coords = cell[2] || [];
+    const attrs = cell[3] || [];
+    const n = Math.min(Math.floor(coords.length / 4), Math.floor(attrs.length / 5));
+    for (let i = 0; i < n; i++) {
+      const mask = attrs[i * 5];
+      if (!(mask & (1 << tolIdx))) continue;
+      let style = -1;
+      if (mode === 'gradient') style = unpackTolNibble(attrs[i * 5 + 3], tolIdx);
+      else if (mode === 'routes') style = unpackTolNibble(attrs[i * 5 + 4], tolIdx);
+      else if (mode === 'type') {
+        style = unpackTolNibble(attrs[i * 5 + 1], tolIdx);
+        const bucket = store.typeBuckets?.[style];
+        if (bucket && z < minZoomForTypeBucket(bucket)) { notes.hiddenDetail = true; continue; }
+      } else if (mode === 'stress') style = unpackTolNibble(attrs[i * 5 + 2], tolIdx);
+      if (style < 0) continue;
+      total++;
+      refs.push([cell, i, style]);
+    }
+  }
+  if (refs.length > cap) {
+    notes.capped = true;
+    const sampled = [];
+    const step = refs.length / cap;
+    for (let i = 0; i < cap; i++) sampled.push(refs[Math.floor(i * step)]);
+    refs.length = 0;
+    refs.push(...sampled);
+  }
+
+  const groups = new Map();
+  for (const [cell, i, style] of refs) {
+    const coords = cell[2];
+    const o = i * 4;
+    let arr = groups.get(style);
+    if (!arr) groups.set(style, arr = []);
+    arr.push([[coords[o] / scale, coords[o + 1] / scale], [coords[o + 2] / scale, coords[o + 3] / scale]]);
+  }
+  return { groups, total, selected:refs.length, capped:refs.length < total };
+}
+async function drawOptimizedAddressGradientAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedAddressLines(store)) return;
+  const result = collectOptimizedAddressGroups(store, 'gradient', notes);
+  if (token !== viewportRenderToken) return;
+  for (const [bucket, lines] of result.groups) {
+    if (token !== viewportRenderToken) return;
+    addDynamicPolyline(lines, { color:`hsl(${120-bucket*13},100%,50%)`, baseWeight:1, opacity:.75 }, layer, overlay);
+    await yieldFrame();
+  }
+}
+async function drawOptimizedAddressRoutesAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedAddressLines(store)) return;
+  const result = collectOptimizedAddressGroups(store, 'routes', notes);
+  if (token !== viewportRenderToken) return;
+  for (const [bucket, lines] of result.groups) {
+    if (token !== viewportRenderToken) return;
+    addDynamicPolyline(lines, { color:'#16a34a', baseWeight:addressRouteBucketWeight(bucket), opacity:.55 }, layer, overlay);
+    await yieldFrame();
+  }
+}
+async function drawOptimizedAddressTypeBucketsAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedAddressLines(store)) return;
+  const result = collectOptimizedAddressGroups(store, 'type', notes);
+  const defs = { paths:['#16a34a',1.7], lanes:['#2563eb',1.7], friendly:['#ffee58',1.4], roads:['#ef4444',1], others:['#b38804',1], walking:['#9ca3af',.35], services:['#4b5563',.35], crossings:['#22d3ee',.8] };
+  const order = ['paths','lanes','friendly','roads','others','walking','services','crossings'];
+  for (const bucket of order) {
+    if (token !== viewportRenderToken) return;
+    const code = store.typeBuckets?.indexOf(bucket);
+    const lines = result.groups.get(code);
+    if (!lines?.length) continue;
+    const [color, weight] = defs[bucket] || ['#b38804', 1];
+    addDynamicPolyline(lines, { color, baseWeight:weight, opacity:.65 }, layer, overlay);
+    await yieldFrame();
+  }
+}
+async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, token, notes){
+  if (!validOptimizedAddressLines(store)) return;
+  const result = collectOptimizedAddressGroups(store, 'stress', notes);
+  const defs = { low:['#2da15f',1], med:['#b3bf43',1], high:['#b07317',1], extreme:['#b04848',1], critical:['#610909',1], gray:['#4b5563',.35] };
+  for (const bucket of ['low','med','high','extreme','critical','gray']) {
+    if (token !== viewportRenderToken) return;
+    const code = store.stressBuckets?.indexOf(bucket);
+    const lines = result.groups.get(code);
+    if (!lines?.length) continue;
+    const [color, weight] = defs[bucket] || ['#4b5563', .35];
+    addDynamicPolyline(lines, { color, baseWeight:weight, opacity:.62 }, layer, overlay);
+    await yieldFrame();
+  }
+}
+
 function routeWeight(flow){ return Math.max(1, Math.log(flow || 1) * 1.2); }
 function routeWeightBin(weight){
   if (weight < 1.5) return 1;
@@ -1739,8 +1891,15 @@ async function renderViewportDependentLayers(){
   }
 
   if (ds.kind === 'address' && m) {
-    if (state.addressView === 'gradient') await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
-    if (state.addressView === 'routes') await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
+    const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
+    if (state.addressView === 'gradient') {
+      if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
+      else await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+    }
+    if (state.addressView === 'routes') {
+      if (optimizedAddressLines) await drawOptimizedAddressRoutesAsync(optimizedAddressLines, layers.main, false, token, notes);
+      else await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
+    }
   }
 
   await drawOverlaysAsync(data, m, token, keys, notes);
@@ -1752,12 +1911,14 @@ async function renderViewportDependentLayers(){
 
 async function drawOverlaysAsync(data, m, token, keys, notes){
   const optimizedCityLines = validOptimizedCityLines(data.cityLineSegments) ? data.cityLineSegments : null;
+  const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
   if (state.overlays.type) {
     const c = data.cityLines?.classification;
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedTypeBucketsAsync(optimizedCityLines, layers.type, true, token, notes);
     else if (state.mode === 'city' && c) await drawTypeBucketsAsync(c, layers.type, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && m?.lines?.classification) await drawTypeBucketsAsync(m.lines.classification, layers.type, true, token, notes);
+    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressTypeBucketsAsync(optimizedAddressLines, layers.type, true, token, notes);
+    else if (state.mode === 'address' && m?.lines?.classification) await drawTypeBucketsAsync(m.lines.classification, layers.type, true, token, notes);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
   if (state.overlays.stress) {
@@ -1766,7 +1927,8 @@ async function drawOverlaysAsync(data, m, token, keys, notes){
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedStressBucketsAsync(optimizedCityLines, layers.stress, true, token, notes);
     else if (state.mode === 'city' && cityStress) await drawStressBucketsAsync(cityStress, layers.stress, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && addrStress) await drawStressBucketsAsync(addrStress, layers.stress, true, token, notes);
+    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressStressBucketsAsync(optimizedAddressLines, layers.stress, true, token, notes);
+    else if (state.mode === 'address' && addrStress) await drawStressBucketsAsync(addrStress, layers.stress, true, token, notes);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
   if (state.overlays.dest) drawDestinationsOverlay(data, m, keys, notes);
