@@ -222,13 +222,14 @@ const SAMPLE_FILE_PATHS = [
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
 let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null;
-const canvasRenderer = L.canvas({ padding: 0.5 });
+const canvasRenderer = L.canvas({ padding: 0.25 });
 const dynamicVectors = [];
 const renderJobs = { main:0, type:0, stress:0, dest:0, bad:0 };
 const RENDER_JOB_KEYS = ['main','type','stress','dest','bad'];
-const POLYLINE_RENDER_BATCH = 90;
-const POINT_RENDER_BATCH = 180;
-const MULTILINE_SEGMENTS_PER_LAYER = 140;
+const POLYLINE_RENDER_BATCH = 600;
+const POINT_RENDER_BATCH = 1200;
+const MULTILINE_SEGMENTS_PER_LAYER = 1000;
+const RENDER_TARGET_MS = { main: 2200, type: 2400, stress: 2400, dest: 1800, bad: 1200 };
 const DENSE_POINT_MIN_ZOOM = 12;
 const BIKE_PARKING_MIN_ZOOM = 13;
 
@@ -270,17 +271,37 @@ function bumpRenderJob(key){
 }
 function cancelRenderJob(key){ bumpRenderJob(key); }
 function cancelRenderJobs(keys=RENDER_JOB_KEYS){ keys.forEach(cancelRenderJob); }
-function scheduleChunkedRender(jobKey, items, drawItem, batchSize=POLYLINE_RENDER_BATCH){
+function scheduleChunkedRender(jobKey, items, drawItem, batchSize=POLYLINE_RENDER_BATCH, opts={}){
   const list = Array.isArray(items) ? items : [];
   if (!list.length) return;
+
   const token = bumpRenderJob(jobKey);
+  const targetMs = opts.targetMs ?? RENDER_TARGET_MS[jobKey] ?? 2200;
+  const targetFrames = Math.max(1, Math.ceil(targetMs / 16));
+  const adaptiveBatch = Math.max(1, Math.max(batchSize, Math.ceil(list.length / targetFrames)));
+  const immediateLimit = opts.immediateLimit ?? adaptiveBatch;
   let index = 0;
   const schedule = window.requestAnimationFrame || (cb => setTimeout(cb, 0));
+
+  function finish(){
+    if (renderJobs[jobKey] === token) opts.onDone?.();
+  }
+
+  if (list.length <= immediateLimit) {
+    for (; index < list.length; index++) {
+      if (renderJobs[jobKey] !== token) return;
+      drawItem(list[index], index);
+    }
+    finish();
+    return;
+  }
+
   function step(){
     if (renderJobs[jobKey] !== token) return;
-    const end = Math.min(index + batchSize, list.length);
+    const end = Math.min(index + adaptiveBatch, list.length);
     for (; index < end; index++) drawItem(list[index], index);
     if (index < list.length) schedule(step);
+    else finish();
   }
   step();
 }
@@ -302,16 +323,27 @@ function clearOverlayLayer(name){
 function clearOverlayLayers(){
   ['bad','stress','type','dest'].forEach(clearOverlayLayer);
 }
-function addDynamicPolyline(latlngs, options, layer, owner='main'){
+function addDynamicPolyline(latlngs, options={}, layer, owner='main'){
   const baseWeight = options.baseWeight ?? options.weight ?? 1;
+  const z = options.z ?? 0;
+  const renderOptions = { ...options };
+  delete renderOptions.baseWeight;
+  delete renderOptions.z;
+
   const poly = L.polyline(latlngs, {
     renderer: canvasRenderer,
     interactive: false,
-    ...options,
+    ...renderOptions,
     weight: dynamicWeight(baseWeight)
   }).addTo(layer);
-  dynamicVectors.push({ poly, baseWeight, owner });
+  dynamicVectors.push({ poly, baseWeight, owner, z });
   return poly;
+}
+function restackDynamicVectorsByOwner(owner){
+  dynamicVectors
+    .filter(item => item.owner === owner && item.poly?.bringToFront)
+    .sort((a,b) => (a.z ?? 0) - (b.z ?? 0))
+    .forEach(item => item.poly.bringToFront());
 }
 function isMultiPolyline(latlngs){
   return Array.isArray(latlngs) && Array.isArray(latlngs[0]) && Array.isArray(latlngs[0][0]);
@@ -326,8 +358,20 @@ function pushPolylineChunks(items, latlngs, options){
     items.push({ latlngs, options });
   }
 }
-function drawPolylineItemsChunked(jobKey, items, layer, owner=jobKey){
-  scheduleChunkedRender(jobKey, items, item => addDynamicPolyline(item.latlngs, item.options, layer, owner), POLYLINE_RENDER_BATCH);
+function drawPolylineItemsChunked(jobKey, items, layer, owner=jobKey, opts={}){
+  scheduleChunkedRender(
+    jobKey,
+    items,
+    item => addDynamicPolyline(item.latlngs, item.options, layer, owner),
+    POLYLINE_RENDER_BATCH,
+    {
+      ...opts,
+      onDone: () => {
+        if (opts.restack) restackDynamicVectorsByOwner(owner);
+        opts.onDone?.();
+      }
+    }
+  );
 }
 function updateDynamicWeightsOnly(){
   if (!map) return;
@@ -426,7 +470,7 @@ function prettifySampleLabel(name){
   let base = raw.split('/').pop() || raw;
   try { base = decodeURIComponent(base); } catch {}
   if (/39\.98404_-83/i.test(base)) return COLUMBUS_ADDRESS_LABEL;
-  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(base)) return 'Copenhagen, Denmark';
+  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(base)) return 'Copenhagen Denmark';
   return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
@@ -447,7 +491,7 @@ function isLegacyCopenhagenEntry(entry){
 function sampleLabel(entry){
   const raw = String(entry?.name || entry?.url || entry?.label || '');
   if (/39\.98404_-83/i.test(raw)) return COLUMBUS_ADDRESS_LABEL;
-  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(raw)) return 'Copenhagen, Denmark';
+  if (/Copenhagen(?:_Municipality)?_Denmark/i.test(raw)) return 'Copenhagen Denmark';
   return entry?.label || prettifySampleLabel(entry?.name || entry?.url || 'sample');
 }
 
@@ -1472,7 +1516,7 @@ function drawOverlayLayer(name, data, m){
       L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
         .bindPopup(() => `${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
         .addTo(layers.dest);
-    }, POINT_RENDER_BATCH);
+    }, POINT_RENDER_BATCH, { targetMs: RENDER_TARGET_MS.dest });
     return;
   }
   if (name === 'bad') {
@@ -1482,7 +1526,7 @@ function drawOverlayLayer(name, data, m){
       L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
         .bindPopup(() => `Penalty: ${fmtSig(pen,1)}`)
         .addTo(layers.bad);
-    }, POINT_RENDER_BATCH);
+    }, POINT_RENDER_BATCH, { targetMs: RENDER_TARGET_MS.bad });
   }
 }
 function cityPointKey(){
@@ -1507,10 +1551,23 @@ function drawStressBuckets(b, layer, owner='stress'){
 }
 function drawTypeBuckets(b, layer, owner='type'){
   const items = [];
-  [['others','#b38804',1],['roads','#ef4444',1],['friendly','#ffee58',1.4],['walking','#9ca3af',.35],['services','#4b5563',.35],['lanes','#2563eb',1.7],['paths','#16a34a',1.7],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
-    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.65 });
+
+  // Draw the primary bike network first, then lower-priority walk/service/crossing geometry last.
+  // z controls final visual stacking after progressive rendering finishes.
+  [
+    ['paths',    '#16a34a', 1.7, 90],
+    ['lanes',    '#2563eb', 1.7, 80],
+    ['friendly', '#ffee58', 1.4, 70],
+    ['roads',    '#ef4444', 1,   50],
+    ['others',   '#b38804', 1,   40],
+    ['walking',  '#9ca3af', .35, 30],
+    ['services', '#4b5563', .35, 20],
+    ['crossings','#22d3ee', .8,  10]
+  ].forEach(([k,c,r,z])=>{
+    if(b[k]?.length) pushPolylineChunks(items, b[k], { color:c, baseWeight:r, opacity:.65, z });
   });
-  drawPolylineItemsChunked(owner, items, layer, owner);
+
+  drawPolylineItemsChunked(owner, items, layer, owner, { targetMs: RENDER_TARGET_MS.type, restack:true });
 }
 
 function reportedDeviceMemoryGb(){
