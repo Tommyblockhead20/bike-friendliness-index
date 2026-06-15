@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer BetaB34</title>
+  <title>BFI Viewer Beta B35</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -139,7 +139,7 @@
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
     <header class="shrink-0">
-      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta</h1>
+      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta B35</h1>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
@@ -318,7 +318,7 @@ const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead
 // The hosted site currently relies on the known sample files below. Keep remote discovery off by default:
 // the manifest/GitHub API probes 404 on the live site and only add noisy failed requests before the real zip load.
 const ENABLE_SAMPLE_DISCOVERY = false;
-let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null, renderTimer = null, viewportRenderTimer = null;
+let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null, renderTimer = null, viewportRenderTimer = null, suppressNextMoveendRefresh = false;
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
 const DENSE_POINT_MIN_ZOOM = 12;
@@ -350,13 +350,22 @@ async function initMap(){
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => {
     clearTimeout(zoomRenderTimer);
+    suppressNextMoveendRefresh = true;
     zoomRenderTimer = setTimeout(() => {
+      // Keep zooming/pinch-zooming city-like: Leaflet scales existing vectors,
+      // and we only adjust line weights instead of tearing every address layer down.
       updateDynamicWeightsOnly();
-      scheduleViewportLayerRefresh(70);
       maybeRefreshBikeParkingOverlay();
+      setTimeout(() => { suppressNextMoveendRefresh = false; }, 0);
     }, 60);
   });
-  map.on('moveend', () => scheduleViewportLayerRefresh(110));
+  map.on('moveend', () => {
+    if (suppressNextMoveendRefresh) {
+      suppressNextMoveendRefresh = false;
+      return;
+    }
+    scheduleViewportLayerRefresh(110);
+  });
 
   setSampleStatus('Loading Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
@@ -429,7 +438,13 @@ function scheduleViewportLayerRefresh(delay=90){
   viewportRenderTimer = setTimeout(() => renderViewportDependentLayers(), delay);
 }
 function renderOverlaysOnly(){
-  renderViewportDependentLayers();
+  renderViewportDependentLayers({ refreshMain:false, refreshOverlays:true });
+}
+function syncAddressViewButtons(){
+  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`)?.classList.toggle('active', x===state.addressView));
+}
+function syncOverlayButtons(){
+  ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`)?.classList.toggle('active', state.overlays[k]));
 }
 function setMapBusy(active, text='Updating map…'){
   const el = document.getElementById('mapBusyIndicator');
@@ -799,16 +814,18 @@ function unpackTolNibble(pack, tolIdx){
   return v ? v - 1 : -1;
 }
 function addressRouteBucketWeight(bucket){
+  // Keep route visualization readable. The global dynamicWeight() already grows
+  // line width as you zoom in, so route buckets should be small multipliers here.
   let base;
-  if (bucket < 2) base = 1;
-  else if (bucket < 4) base = 1.6;
-  else if (bucket < 7) base = 2.4;
-  else if (bucket < 10) base = 3.5;
-  else if (bucket < 13) base = 4.8;
-  else base = 6;
+  if (bucket < 2) base = 0.22;
+  else if (bucket < 4) base = 0.30;
+  else if (bucket < 7) base = 0.42;
+  else if (bucket < 10) base = 0.56;
+  else if (bucket < 13) base = 0.72;
+  else base = 0.90;
   const z = map?.getZoom?.() || 12;
-  const zoomScale = z <= 11 ? 0.58 : z < 13 ? 0.78 : z < 14 ? 0.9 : 1;
-  return Math.max(0.85, base * zoomScale);
+  const zoomScale = z <= 11 ? 0.75 : z < 13 ? 0.85 : z < 15 ? 0.95 : 1;
+  return Math.max(0.18, base * zoomScale);
 }
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
@@ -889,9 +906,10 @@ async function drawOptimizedAddressRoutesAsync(store, layer, overlay, token, not
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'routes', notes);
   if (token !== viewportRenderToken) return;
-  for (const [bucket, lines] of result.groups) {
+  const entries = [...result.groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0]));
+  for (const [bucket, lines] of entries) {
     if (token !== viewportRenderToken) return;
-    addDynamicPolyline(lines, { color:'#16a34a', baseWeight:addressRouteBucketWeight(bucket), opacity:.55 }, layer, overlay);
+    addDynamicPolyline(lines, { color:'#16a34a', baseWeight:addressRouteBucketWeight(bucket), opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay);
     await yieldFrame();
   }
 }
@@ -927,11 +945,11 @@ async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, tok
 
 function routeWeight(flow){ return Math.max(1, Math.log(flow || 1) * 1.2); }
 function routeWeightBin(weight){
-  if (weight < 1.5) return 1;
-  if (weight < 2.3) return 2;
-  if (weight < 3.3) return 3;
-  if (weight < 4.8) return 4.2;
-  return 6;
+  if (weight < 1.5) return 0.25;
+  if (weight < 2.3) return 0.35;
+  if (weight < 3.3) return 0.50;
+  if (weight < 4.8) return 0.70;
+  return 0.95;
 }
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
 function formatCoordinateAddressLabel(value, decimals=4){
@@ -1727,8 +1745,15 @@ function setFocus(f){
 function setAddressView(v){
   if (v !== 'none' && gatedLimitedFeature()) return;
   state.addressView=v;
-  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
-  renderViewportDependentLayers();
+  if (state.mode === 'address' && v !== 'none') {
+    state.overlays.type = false;
+    state.overlays.stress = false;
+    clearLayerByKey('type');
+    clearLayerByKey('stress');
+  }
+  syncAddressViewButtons();
+  syncOverlayButtons();
+  renderViewportDependentLayers({ refreshMain:true, refreshOverlays:true });
 }
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); scheduleRender(80); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); scheduleRender(80); }
@@ -1741,12 +1766,20 @@ function setTolerance(v){
 function toggleOverlay(name){
   if (gatedLimitedFeature()) return;
   state.overlays[name]=!state.overlays[name];
-  if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
-  if (name === 'type' && state.overlays.type) state.overlays.stress = false;
+  let refreshMain = false;
+  if (name === 'stress' && state.overlays.stress) {
+    state.overlays.type = false;
+    if (state.mode === 'address') { state.addressView = 'none'; refreshMain = true; }
+  }
+  if (name === 'type' && state.overlays.type) {
+    state.overlays.stress = false;
+    if (state.mode === 'address') { state.addressView = 'none'; refreshMain = true; }
+  }
   if (name === 'dest' && state.overlays.dest) state.overlays.bad = false;
   if (name === 'bad' && state.overlays.bad) state.overlays.dest = false;
-  ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
-  renderOverlaysOnly();
+  syncAddressViewButtons();
+  syncOverlayButtons();
+  renderViewportDependentLayers({ refreshMain, refreshOverlays:true });
 }
 
 function score(m, focus=state.focus){
@@ -2009,7 +2042,7 @@ function drawRoutes(lines, layer, overlay=false){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 async function drawRoutesAsync(lines, layer, overlay, token, notes){
   const result = await visibleItemsForLines(lines || [], token, 'addressRoutes', 'routes', item => item?.seg);
@@ -2022,7 +2055,7 @@ async function drawRoutesAsync(lines, layer, overlay, token, notes){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -2063,13 +2096,18 @@ function toggleDetailOverride(){
 }
 
 
-async function renderViewportDependentLayers(){
+async function renderViewportDependentLayers(options={}){
+  const refreshMain = options.refreshMain !== false;
+  const refreshOverlays = options.refreshOverlays !== false;
   const token = ++viewportRenderToken;
-  clearViewportDynamicLayers();
-  const busy = hasViewportDependentLayers();
-  setMapBusy(busy, 'Updating map…');
+  if (refreshMain) clearLayerByKey('main');
+  if (refreshOverlays) clearOverlayLayers();
+
   const ds = activeDataset();
   if (!ds) { setMapBusy(false); return; }
+  const shouldRenderMain = refreshMain && ds.kind === 'address' && state.addressView !== 'none';
+  const shouldRenderOverlays = refreshOverlays && !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad);
+  setMapBusy(shouldRenderMain || shouldRenderOverlays, 'Updating map…');
 
   const data = ds.data;
   const m = currentMetrics();
@@ -2082,13 +2120,13 @@ async function renderViewportDependentLayers(){
     if (pointKey) keys.push(pointKey);
     const rankNote = cityRankDisclaimer(data);
     if (rankNote) warnings.push(rankNote);
-    if (hasViewportDependentLayers()) {
+    if (shouldRenderMain || shouldRenderOverlays) {
       document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
     } else {
       document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
     }
 
-    if (ds.kind === 'address' && m) {
+    if (shouldRenderMain && m) {
       const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
       if (state.addressView === 'gradient') {
         if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
@@ -2100,7 +2138,7 @@ async function renderViewportDependentLayers(){
       }
     }
 
-    await drawOverlaysAsync(data, m, token, keys, notes);
+    if (refreshOverlays) await drawOverlaysAsync(data, m, token, keys, notes);
     if (token !== viewportRenderToken) return;
     if (hasViewportDependentLayers()) warnings.push(largeCityWarning(notes.capped || notes.hiddenDetail));
     document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
