@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Optimized v14</title>
+  <title>BFI Viewer Beta Optimized v14 Address Fix v2</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -1091,6 +1091,9 @@ async function resolveSampleFiles(){
 function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
 }
+function yieldFrame(){
+  return nextPaint();
+}
 
 function pendingSampleEntries(){
   return state.sampleEntries.filter(entry => !state.sampleLoadedKeys.has(sampleKey(entry)));
@@ -2065,15 +2068,16 @@ async function renderViewportDependentLayers(){
   clearViewportDynamicLayers();
   const busy = hasViewportDependentLayers();
   setMapBusy(busy, 'Updating map…');
+  const ds = activeDataset();
+  if (!ds) { setMapBusy(false); return; }
+
+  const data = ds.data;
+  const m = currentMetrics();
+  const keys = [];
+  const warnings = [];
+  const notes = { capped:false, hiddenDetail:false };
 
   try {
-    const ds = activeDataset();
-    if (!ds) return;
-    const data = ds.data;
-    const m = currentMetrics();
-    const keys = [];
-    const warnings = [];
-    const notes = { capped:false, hiddenDetail:false };
     const pointKey = cityPointKey();
     if (pointKey) keys.push(pointKey);
     const rankNote = cityRankDisclaimer(data);
@@ -2103,8 +2107,7 @@ async function renderViewportDependentLayers(){
   } catch (err) {
     console.error('Viewport layer render failed:', err);
     if (token === viewportRenderToken) {
-      const msg = escapeHtml(err?.message || String(err));
-      document.getElementById('legend').innerHTML += noteBlock('Rendering error', msg);
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + noteBlock('Rendering error', escapeHtml(err?.message || String(err)));
     }
   } finally {
     if (token === viewportRenderToken) setMapBusy(false);
