@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta B35</title>
+  <title>BFI Viewer Beta B36</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -138,8 +138,9 @@
 </head>
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
-    <header class="shrink-0">
+    <header class="shrink-0 flex items-center justify-between gap-3">
       <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta B35</h1>
+      <a class="btn active shrink-0" href="https://bikefriendlinessindex.org/" aria-label="Go to Bike Friendliness Index home">Go home</a>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
@@ -364,7 +365,9 @@ async function initMap(){
       suppressNextMoveendRefresh = false;
       return;
     }
-    scheduleViewportLayerRefresh(110);
+    // Address datasets are fully resident and rendered once. Do not rebuild
+    // address linework just because the user pans the map.
+    if (hasPanViewportDependentLayers()) scheduleViewportLayerRefresh(110);
   });
 
   setSampleStatus('Loading Mackinac Island sample...', 0, 1);
@@ -427,6 +430,11 @@ function updateDynamicWeightsOnly(){
 }
 function hasViewportDependentLayers(){
   return !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad || (state.mode === 'address' && state.addressView !== 'none'));
+}
+function hasPanViewportDependentLayers(){
+  // City-scale overlays are intentionally viewport-limited for performance.
+  // Address-scale linework, destinations, and risk points are small enough to keep loaded.
+  return state.mode === 'city' && !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad);
 }
 function scheduleRender(delay=50){
   clearTimeout(renderTimer);
@@ -590,19 +598,10 @@ function visibleLineCap(kind, bucket=''){
   const z = map?.getZoom?.() || 11;
   if (state.detailOverride) return Infinity;
 
-  // Address linework must still be capped. Otherwise large address datasets can
-  // monopolize the main thread/canvas and appear to render only one bucket forever.
-  if (kind === 'addressRoutes') {
-    const base = z < 12 ? 18000 : z < 13 ? 45000 : z < 14 ? 90000 : z < 15 ? 160000 : 260000;
-    return Math.max(1000, Math.floor(base));
-  }
-  if (kind === 'addressGradient') {
-    const base = z < 12 ? 24000 : z < 13 ? 65000 : z < 14 ? 130000 : z < 15 ? 230000 : 360000;
-    return Math.max(1000, Math.floor(base));
-  }
-  if (state.mode === 'address' && (kind === 'type' || kind === 'stress')) {
-    const base = z < 12 ? 28000 : z < 13 ? 75000 : z < 14 ? 145000 : z < 15 ? 260000 : 420000;
-    return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
+  // Address analyses are much smaller than city analyses, so keep address linework complete.
+  // The async/yielded renderer keeps the UI responsive without hiding data.
+  if (kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'))) {
+    return Infinity;
   }
 
   let base;
@@ -616,7 +615,7 @@ function visibleLineCap(kind, bucket=''){
   return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
 }
 function pointCap(kind){
-  if (state.detailOverride) return Infinity;
+  if (state.mode === 'address' || state.detailOverride) return Infinity;
   const z = map?.getZoom?.() || 11;
   if (kind === 'dest') return z < 12 ? 45000 : z < 13 ? 70000 : Infinity;
   if (kind === 'bad') return z < 12 ? 25000 : z < 13 ? 40000 : Infinity;
@@ -631,6 +630,10 @@ function minZoomForTypeBucket(bucket){
 }
 async function visibleItemsForLines(items, token, kind, bucket='', getLine=itemLine){
   if (!items?.length) return { selected:[], visibleCount:0, sourceCount:0, capped:false };
+  const addressLineKind = kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'));
+  if (addressLineKind) {
+    return { selected:items, visibleCount:items.length, sourceCount:items.length, capped:false };
+  }
   const idx = await buildSpatialIndex(items, getLine);
   if (token !== viewportRenderToken) return null;
   const cap = visibleLineCap(kind, bucket);
@@ -814,34 +817,34 @@ function unpackTolNibble(pack, tolIdx){
   return v ? v - 1 : -1;
 }
 function addressRouteBucketWeight(bucket){
-  // Keep route visualization readable. The global dynamicWeight() already grows
-  // line width as you zoom in, so route buckets should be small multipliers here.
+  // Slightly stronger route emphasis: thin lines remain visible, while high-flow
+  // route buckets are meaningfully thicker. The global dynamicWeight() still
+  // handles zoom scaling.
   let base;
-  if (bucket < 2) base = 0.22;
-  else if (bucket < 4) base = 0.30;
-  else if (bucket < 7) base = 0.42;
-  else if (bucket < 10) base = 0.56;
-  else if (bucket < 13) base = 0.72;
-  else base = 0.90;
+  if (bucket < 2) base = 0.26;
+  else if (bucket < 4) base = 0.34;
+  else if (bucket < 7) base = 0.48;
+  else if (bucket < 10) base = 0.68;
+  else if (bucket < 13) base = 0.92;
+  else base = 1.22;
   const z = map?.getZoom?.() || 12;
-  const zoomScale = z <= 11 ? 0.75 : z < 13 ? 0.85 : z < 15 ? 0.95 : 1;
-  return Math.max(0.18, base * zoomScale);
+  const zoomScale = z <= 11 ? 0.78 : z < 13 ? 0.88 : z < 15 ? 0.98 : 1.08;
+  return Math.max(0.22, base * zoomScale);
+}
+function routeColorForBucket(bucket){
+  const x = Number(bucket) || 0;
+  const t = Math.max(0, Math.min(1, x <= 1 ? x : x / 14));
+  const hue = Math.round(145 - t * 10);
+  const saturation = Math.round(70 - t * 4);
+  const lightness = Math.round(50 - t * 9);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
   if (!idx) return [];
-  const b = paddedMapBounds(0.55);
-  const cs = idx.cellDegrees || SPATIAL_INDEX_CELL_DEG;
-  const minX = Math.floor(b.south / cs), maxX = Math.floor(b.north / cs);
-  const minY = Math.floor(b.west / cs), maxY = Math.floor(b.east / cs);
-  const cells = [];
-  for (let x = minX; x <= maxX; x++) {
-    for (let y = minY; y <= maxY; y++) {
-      const cell = idx.map.get(`${x},${y}`);
-      if (cell) cells.push(cell);
-    }
-  }
-  return cells;
+  // Address analyses are intentionally rendered as a complete local dataset.
+  // No viewport slicing: panning should feel like city viewing, not like a reload.
+  return [...idx.map.values()];
 }
 function collectOptimizedAddressGroups(store, mode, notes){
   const tolIdx = currentAddressTolIndex(store);
@@ -909,7 +912,7 @@ async function drawOptimizedAddressRoutesAsync(store, layer, overlay, token, not
   const entries = [...result.groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0]));
   for (const [bucket, lines] of entries) {
     if (token !== viewportRenderToken) return;
-    addDynamicPolyline(lines, { color:'#16a34a', baseWeight:addressRouteBucketWeight(bucket), opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay);
+    addDynamicPolyline(lines, { color:routeColorForBucket(bucket), baseWeight:addressRouteBucketWeight(bucket), opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay);
     await yieldFrame();
   }
 }
@@ -945,11 +948,11 @@ async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, tok
 
 function routeWeight(flow){ return Math.max(1, Math.log(flow || 1) * 1.2); }
 function routeWeightBin(weight){
-  if (weight < 1.5) return 0.25;
-  if (weight < 2.3) return 0.35;
-  if (weight < 3.3) return 0.50;
-  if (weight < 4.8) return 0.70;
-  return 0.95;
+  if (weight < 1.5) return 0.28;
+  if (weight < 2.3) return 0.40;
+  if (weight < 3.3) return 0.58;
+  if (weight < 4.8) return 0.82;
+  return 1.10;
 }
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
 function formatCoordinateAddressLabel(value, decimals=4){
@@ -2042,7 +2045,7 @@ function drawRoutes(lines, layer, overlay=false){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:routeColorForBucket(w), baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 async function drawRoutesAsync(lines, layer, overlay, token, notes){
   const result = await visibleItemsForLines(lines || [], token, 'addressRoutes', 'routes', item => item?.seg);
@@ -2055,7 +2058,7 @@ async function drawRoutesAsync(lines, layer, overlay, token, notes){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:routeColorForBucket(w), baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -2121,7 +2124,9 @@ async function renderViewportDependentLayers(options={}){
     const rankNote = cityRankDisclaimer(data);
     if (rankNote) warnings.push(rankNote);
     if (shouldRenderMain || shouldRenderOverlays) {
-      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
+      const renderNote = noteBlock('Rendering', state.mode === 'address' ? 'Drawing address detail…' : 'Updating visible map detail…');
+      const detailNote = state.mode === 'city' ? largeCityWarning(false) : '';
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + detailNote + renderNote;
     } else {
       document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
     }
@@ -2140,7 +2145,7 @@ async function renderViewportDependentLayers(options={}){
 
     if (refreshOverlays) await drawOverlaysAsync(data, m, token, keys, notes);
     if (token !== viewportRenderToken) return;
-    if (hasViewportDependentLayers()) warnings.push(largeCityWarning(notes.capped || notes.hiddenDetail));
+    if (notes.capped || notes.hiddenDetail) warnings.push(largeCityWarning(true));
     document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
   } catch (err) {
     console.error('Viewport layer render failed:', err);
@@ -2185,12 +2190,12 @@ function destinationPriority(p){
 }
 function drawDestinationsOverlay(data, m, keys, notes){
   const rawPois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-  const bounds = paddedMapBounds();
-  const bikeParkingVisible = shouldDrawBikeParking();
+  const bounds = state.mode === 'address' ? null : paddedMapBounds();
+  const bikeParkingVisible = state.mode === 'address' ? true : shouldDrawBikeParking();
   const visible = [];
   let hiddenBikeParking = 0;
   rawPois.forEach(p => {
-    if (!pointLikeInBounds(p, bounds)) return;
+    if (bounds && !pointLikeInBounds(p, bounds)) return;
     const isBikeParking = isBikeParkingPoi(p);
     if (isBikeParking && !bikeParkingVisible) { hiddenBikeParking++; return; }
     visible.push(p);
@@ -2211,8 +2216,8 @@ function drawDestinationsOverlay(data, m, keys, notes){
 
 function drawBadOverlay(data, m, keys, notes){
   const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-  const bounds = paddedMapBounds();
-  const visible = pts.filter(p => pointLikeInBounds(p, bounds));
+  const bounds = state.mode === 'address' ? null : paddedMapBounds();
+  const visible = bounds ? pts.filter(p => pointLikeInBounds(p, bounds)) : pts;
   const selected = prioritySampleItems(visible, pointCap('bad'), p => {
     const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
     return Number(pen) || 0;
