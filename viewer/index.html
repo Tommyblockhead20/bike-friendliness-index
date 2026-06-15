@@ -76,29 +76,7 @@
       animation: busy-spin .75s linear infinite;
       flex:0 0 auto;
     }
-    .busy-mini-bar {
-      width:54px;
-      height:3px;
-      border-radius:999px;
-      overflow:hidden;
-      background:#1e293b;
-      position:relative;
-    }
-    .busy-mini-bar::before {
-      content:"";
-      position:absolute;
-      inset:0;
-      width:45%;
-      background:#38bdf8;
-      border-radius:999px;
-      animation: busy-slide 1.05s ease-in-out infinite;
-    }
     @keyframes busy-spin { to { transform:rotate(360deg); } }
-    @keyframes busy-slide {
-      0% { transform:translateX(-115%); }
-      50% { transform:translateX(95%); }
-      100% { transform:translateX(230%); }
-    }
     .large-warning-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px; }
     .large-warning-head .note-title { margin-bottom:0; }
     .detail-override-btn {
@@ -263,7 +241,7 @@
 
         <div class="grow min-h-0 rounded-xl overflow-hidden border border-slate-600 relative bg-slate-900">
           <div id="map" class="h-full w-full"></div>
-          <div id="mapBusyIndicator" class="map-busy-indicator hidden"><span class="busy-spinner"></span><span id="mapBusyText">Updating map…</span><span class="busy-mini-bar"></span></div>
+          <div id="mapBusyIndicator" class="map-busy-indicator hidden"><span class="busy-spinner"></span><span id="mapBusyText">Updating map…</span></div>
         </div>
       </section>
     </main>
@@ -597,10 +575,19 @@ function visibleLineCap(kind, bucket=''){
   const z = map?.getZoom?.() || 11;
   if (state.detailOverride) return Infinity;
 
-  // Address linework stays uncapped at allowed zooms. If address lines are still missing,
-  // the problem is now almost certainly in the optimized address data/converter.
-  if (kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'))) {
-    return Infinity;
+  // Address linework must still be capped. Otherwise large address datasets can
+  // monopolize the main thread/canvas and appear to render only one bucket forever.
+  if (kind === 'addressRoutes') {
+    const base = z < 12 ? 18000 : z < 13 ? 45000 : z < 14 ? 90000 : z < 15 ? 160000 : 260000;
+    return Math.max(1000, Math.floor(base));
+  }
+  if (kind === 'addressGradient') {
+    const base = z < 12 ? 24000 : z < 13 ? 65000 : z < 14 ? 130000 : z < 15 ? 230000 : 360000;
+    return Math.max(1000, Math.floor(base));
+  }
+  if (state.mode === 'address' && (kind === 'type' || kind === 'stress')) {
+    const base = z < 12 ? 28000 : z < 13 ? 75000 : z < 14 ? 145000 : z < 15 ? 260000 : 420000;
+    return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
   }
 
   let base;
@@ -779,7 +766,13 @@ async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, not
 }
 
 function validOptimizedAddressLines(store){
-  return !!(store && store.format === 'flat-address-grid-v1' && Array.isArray(store.cells) && Array.isArray(store.tolerances));
+  return !!(store && /^flat-address-grid-v\d+$/.test(String(store.format || '')) && Array.isArray(store.cells) && Array.isArray(store.tolerances));
+}
+function validOptimizedAddressTypeLines(store){
+  return validOptimizedAddressLines(store) && Array.isArray(store.typeBuckets);
+}
+function validOptimizedAddressStressLines(store){
+  return validOptimizedAddressLines(store) && Array.isArray(store.stressBuckets);
 }
 function addressGridIndex(store){
   if (!validOptimizedAddressLines(store)) return null;
@@ -820,7 +813,7 @@ function addressRouteBucketWeight(bucket){
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
   if (!idx) return [];
-  const b = paddedMapBounds(1.0);
+  const b = paddedMapBounds(0.55);
   const cs = idx.cellDegrees || SPATIAL_INDEX_CELL_DEG;
   const minX = Math.floor(b.south / cs), maxX = Math.floor(b.north / cs);
   const minY = Math.floor(b.west / cs), maxY = Math.floor(b.east / cs);
@@ -838,7 +831,7 @@ function collectOptimizedAddressGroups(store, mode, notes){
   const cells = queryAddressGridCells(store);
   const scale = Number(store.scale) || 10000000;
   const capKind = mode === 'gradient' ? 'addressGradient' : mode === 'routes' ? 'addressRoutes' : mode;
-  const cap = Infinity;
+  const cap = visibleLineCap(capKind, mode);
   const refs = [];
   let total = 0;
   const z = map?.getZoom?.() || 10;
@@ -2072,40 +2065,50 @@ async function renderViewportDependentLayers(){
   clearViewportDynamicLayers();
   const busy = hasViewportDependentLayers();
   setMapBusy(busy, 'Updating map…');
-  const ds = activeDataset();
-  if (!ds) { setMapBusy(false); return; }
-  const data = ds.data;
-  const m = currentMetrics();
-  const keys = [];
-  const warnings = [];
-  const notes = { capped:false, hiddenDetail:false };
-  const pointKey = cityPointKey();
-  if (pointKey) keys.push(pointKey);
-  const rankNote = cityRankDisclaimer(data);
-  if (rankNote) warnings.push(rankNote);
-  if (hasViewportDependentLayers()) {
-    document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
-  } else {
+
+  try {
+    const ds = activeDataset();
+    if (!ds) return;
+    const data = ds.data;
+    const m = currentMetrics();
+    const keys = [];
+    const warnings = [];
+    const notes = { capped:false, hiddenDetail:false };
+    const pointKey = cityPointKey();
+    if (pointKey) keys.push(pointKey);
+    const rankNote = cityRankDisclaimer(data);
+    if (rankNote) warnings.push(rankNote);
+    if (hasViewportDependentLayers()) {
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
+    } else {
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
+    }
+
+    if (ds.kind === 'address' && m) {
+      const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
+      if (state.addressView === 'gradient') {
+        if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
+        else await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+      }
+      if (state.addressView === 'routes') {
+        if (optimizedAddressLines) await drawOptimizedAddressRoutesAsync(optimizedAddressLines, layers.main, false, token, notes);
+        else await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
+      }
+    }
+
+    await drawOverlaysAsync(data, m, token, keys, notes);
+    if (token !== viewportRenderToken) return;
+    if (hasViewportDependentLayers()) warnings.push(largeCityWarning(notes.capped || notes.hiddenDetail));
     document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
-  }
-
-  if (ds.kind === 'address' && m) {
-    const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
-    if (state.addressView === 'gradient') {
-      if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
-      else await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+  } catch (err) {
+    console.error('Viewport layer render failed:', err);
+    if (token === viewportRenderToken) {
+      const msg = escapeHtml(err?.message || String(err));
+      document.getElementById('legend').innerHTML += noteBlock('Rendering error', msg);
     }
-    if (state.addressView === 'routes') {
-      if (optimizedAddressLines) await drawOptimizedAddressRoutesAsync(optimizedAddressLines, layers.main, false, token, notes);
-      else await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
-    }
+  } finally {
+    if (token === viewportRenderToken) setMapBusy(false);
   }
-
-  await drawOverlaysAsync(data, m, token, keys, notes);
-  if (token !== viewportRenderToken) return;
-  if (hasViewportDependentLayers()) warnings.push(largeCityWarning(notes.capped || notes.hiddenDetail));
-  document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
-  setMapBusy(false);
 }
 async function drawOverlaysAsync(data, m, token, keys, notes){
   const optimizedCityLines = validOptimizedCityLines(data.cityLineSegments) ? data.cityLineSegments : null;
@@ -2115,7 +2118,7 @@ async function drawOverlaysAsync(data, m, token, keys, notes){
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedTypeBucketsAsync(optimizedCityLines, layers.type, true, token, notes);
     else if (state.mode === 'city' && c) await drawTypeBucketsAsync(c, layers.type, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressTypeBucketsAsync(optimizedAddressLines, layers.type, true, token, notes);
+    if (state.mode === 'address' && validOptimizedAddressTypeLines(optimizedAddressLines)) await drawOptimizedAddressTypeBucketsAsync(optimizedAddressLines, layers.type, true, token, notes);
     else if (state.mode === 'address' && m?.lines?.classification) await drawTypeBucketsAsync(m.lines.classification, layers.type, true, token, notes);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
@@ -2125,7 +2128,7 @@ async function drawOverlaysAsync(data, m, token, keys, notes){
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedStressBucketsAsync(optimizedCityLines, layers.stress, true, token, notes);
     else if (state.mode === 'city' && cityStress) await drawStressBucketsAsync(cityStress, layers.stress, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressStressBucketsAsync(optimizedAddressLines, layers.stress, true, token, notes);
+    if (state.mode === 'address' && validOptimizedAddressStressLines(optimizedAddressLines)) await drawOptimizedAddressStressBucketsAsync(optimizedAddressLines, layers.stress, true, token, notes);
     else if (state.mode === 'address' && addrStress) await drawStressBucketsAsync(addrStress, layers.stress, true, token, notes);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
