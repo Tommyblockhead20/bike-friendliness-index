@@ -138,9 +138,9 @@
 </head>
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
-    <header class="shrink-0 flex items-center justify-between gap-3">
+    <header class="shrink-0 flex items-center gap-3">
       <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta 1.0</h1>
-      <a class="btn shrink-0" href="https://bikefriendlinessindex.org/">Go home</a>
+      <a class="btn ml-auto" href="https://bikefriendlinessindex.org/">Go home</a>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
@@ -365,6 +365,7 @@ async function initMap(){
       suppressNextMoveendRefresh = false;
       return;
     }
+    if (activeDataset()?.kind === 'address' || state.mode === 'address') return;
     scheduleViewportLayerRefresh(110);
   });
 
@@ -434,6 +435,7 @@ function scheduleRender(delay=50){
   renderTimer = setTimeout(render, delay);
 }
 function scheduleViewportLayerRefresh(delay=90){
+  if (activeDataset()?.kind === 'address' || state.mode === 'address') return;
   if (!hasViewportDependentLayers()) return;
   clearTimeout(viewportRenderTimer);
   viewportRenderTimer = setTimeout(() => renderViewportDependentLayers(), delay);
@@ -2137,6 +2139,7 @@ async function renderViewportDependentLayers(options={}){
     if ((shouldRenderMain || shouldRenderOverlays) && ownsRenderToken) {
       document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + largeCityWarning(false) + noteBlock('Rendering', 'Updating visible map detail…');
     } else {
+      appendActiveOverlayKeys(keys);
       document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
     }
 
@@ -2296,8 +2299,8 @@ function assessDeviceSupport(){
   const memory = reportedDeviceMemoryGb();
   const reasons = [];
 
-  if (width < 800) reasons.push(`window width is ${width}px; 800px or wider is recommended`);
-  if (memory !== null && memory < 12) reasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
+  if (width < 800) reasons.push('narrow screen');
+  if (memory !== null && memory < 12) reasons.push('limited browser-reported memory');
 
   return {
     level: reasons.length ? 'limited' : 'ok',
@@ -2337,12 +2340,12 @@ function showMobileWarningIfNeeded(options={}){
 
   panel?.classList.remove('border-red-500/60');
   panel?.classList.add('border-yellow-500/60');
-  if (eyebrow) { eyebrow.textContent = 'Computer recommended'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
-  if (title) title.textContent = 'More features are available on a computer.';
-  if (body) body.textContent = 'This viewer works best on a computer with a wide screen and plenty of memory. If you are already on a computer, widen your browser window. On this device, heavy address map modes and overlays are disabled to keep the basic viewer usable.';
+  if (eyebrow) eyebrow.classList.add('hidden');
+  if (title) title.textContent = 'Computer recommended';
+  if (body) body.textContent = 'The viewer needs a lot of processing power for rendering overlays, so overlays are disabled on mobile. Other features may not work correctly. Switch to a computer if possible, and if you are already on a computer, widen your window.';
   if (details) {
-    details.innerHTML = assessment.reasons?.length ? assessment.reasons.map(escapeHtml).join('<br>') : 'Use a computer or wider screen for overlays, address routes, address gradients, and dense analysis layers.';
-    details.classList.remove('hidden');
+    details.innerHTML = '';
+    details.classList.add('hidden');
   }
   actions?.classList.remove('hidden');
 
