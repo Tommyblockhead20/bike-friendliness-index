@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BFI Viewer Beta Optimized v9</title>
+  <title>BFI Viewer Beta B36</title>
   <link rel="icon" href="data:," />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -18,6 +18,9 @@
     .btn.warn.active { background:#dc2626; border-color:#f87171; }
     .btn.orange.active { background:#d97706; border-color:#fbbf24; }
     .btn.purple.active { background:#9333ea; border-color:#c084fc; }
+
+    .btn.limited-feature { opacity:.45; filter:grayscale(.55); border-style:dashed; }
+    .btn.limited-feature:hover { background:#334155; color:#cbd5e1; }
     .label { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:.06em; font-weight:900; }
     .stat { background:#0f172a; border:1px solid #334155; border-radius:10px; padding:10px; text-align:center; }
     .stat .v { color:white; font-size:24px; line-height:1; font-weight:1000; }
@@ -43,12 +46,101 @@
     .popup-stack { display:grid; gap:2px; }
     .popup-stack div { display:flex; justify-content:space-between; gap:14px; }
     .popup-stack span:first-child { color:#475569; font-weight:900; }
+
+
+    .map-busy-indicator {
+      position:absolute;
+      top:12px;
+      right:12px;
+      z-index:850;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      background:#0f172add;
+      border:1px solid #38bdf8aa;
+      color:#e0f2fe;
+      border-radius:999px;
+      padding:7px 10px;
+      font-size:11px;
+      font-weight:1000;
+      box-shadow:0 8px 24px rgba(0,0,0,.35);
+      pointer-events:none;
+    }
+    .map-busy-indicator.hidden { display:none; }
+    .busy-spinner {
+      width:14px;
+      height:14px;
+      border-radius:999px;
+      border:2px solid #38bdf866;
+      border-top-color:#e0f2fe;
+      animation: busy-spin .75s linear infinite;
+      flex:0 0 auto;
+    }
+    @keyframes busy-spin { to { transform:rotate(360deg); } }
+    .large-warning-head { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px; }
+    .large-warning-head .note-title { margin-bottom:0; }
+    .detail-override-btn {
+      cursor:pointer;
+      background:#334155;
+      border:1px solid #64748b;
+      color:#e2e8f0;
+      border-radius:999px;
+      padding:3px 7px;
+      font-size:10px;
+      font-weight:1000;
+      white-space:nowrap;
+    }
+    .detail-override-btn.active { background:#b45309; border-color:#f59e0b; color:white; }
+    .detail-override-btn:hover { background:#475569; color:white; }
+
+
+    /* Basic touchscreen scrolling support. Desktop stays fixed; touch/narrow layouts can scroll the UI. */
+    aside section.panel,
+    #samplePickerList,
+    #deviceWarningPanel,
+    .overflow-y-auto {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
+      touch-action: pan-y;
+    }
+    @media (pointer: coarse), (max-width: 900px) {
+      body {
+        height: auto !important;
+        min-height: 100vh !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+      }
+      body > .h-full,
+      .h-screen {
+        height: auto !important;
+        min-height: 100vh !important;
+      }
+      main.flex {
+        flex-direction: column !important;
+        overflow: visible !important;
+      }
+      aside {
+        width: 100% !important;
+        min-height: auto !important;
+      }
+      aside section.panel {
+        max-height: 46vh;
+        overflow-y: auto !important;
+      }
+      section.grow {
+        min-height: 70vh;
+      }
+      #map {
+        min-height: 62vh;
+      }
+    }
   </style>
 </head>
 <body class="h-screen p-4 overflow-hidden">
   <div class="h-full flex flex-col gap-4">
-    <header class="shrink-0">
-      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta</h1>
+    <header class="shrink-0 flex items-center justify-between gap-3">
+      <h1 class="text-2xl md:text-3xl font-black text-white"><span class="text-blue-500">Bike Friendliness Index</span> Viewer Beta B35</h1>
+      <a class="btn active shrink-0" href="https://bikefriendlinessindex.org/" aria-label="Go to Bike Friendliness Index home">Go home</a>
     </header>
 
     <main class="flex gap-4 min-h-0 grow">
@@ -150,6 +242,7 @@
 
         <div class="grow min-h-0 rounded-xl overflow-hidden border border-slate-600 relative bg-slate-900">
           <div id="map" class="h-full w-full"></div>
+          <div id="mapBusyIndicator" class="map-busy-indicator hidden"><span class="busy-spinner"></span><span id="mapBusyText">Updating map…</span></div>
         </div>
       </section>
     </main>
@@ -196,7 +289,7 @@ const state = {
   datasets:[], currentId:null, autoFitPending:false, overlays:{bad:false, stress:false, type:false, dest:false},
   sampleEntries:[], sampleLoadedKeys:new Set(), sampleLoading:false, samplePriorityKey:null, sampleErrors:[], samplePickerPreselected:false,
   sampleLoadingItems:{}, additionalSamplesLocked:false, additionalSamplesLoadedCount:0, lastBikeParkingVisible:undefined,
-  mapInitStarted:false, deviceGate:'unknown'
+  mapInitStarted:false, deviceGate:'unknown', deviceLimited:false, detailOverride:false
 };
 const EMBEDDED_ANALYSES = [];
 // Used only when no hosted sample files can be loaded, so the viewer still has one demo dataset offline.
@@ -212,21 +305,21 @@ const SAMPLE_SET_NAME = 'BFI Viewer Beta';
 const SAMPLE_MANIFEST_PATH = 'sample-files/BFI Viewer Beta Samples.json';
 const COLUMBUS_ADDRESS_LABEL = '39.98, -83.03 (Grandview Heights, OH)';
 const SAMPLE_FILE_PATHS = [
-  'sample-files/Amsterdam_Netherlands.viewer-pruned.zip',
-  'sample-files/Helsinki_Finland.viewer-pruned.zip',
-  'sample-files/New_York_NY.viewer-pruned.zip',
-  'sample-files/Paris_France.viewer-pruned.zip',
-  'sample-files/Copenhagen_Denmark.viewer-pruned.zip',
-  'sample-files/London_United_Kingdom.viewer-pruned.zip',
-  'sample-files/Utrecht_Netherlands.viewer-pruned.zip',
-  'sample-files/Minneapolis_MN.viewer-pruned.zip',
-  'sample-files/39.98404_-83.viewer-pruned.zip'
+  'sample-files/39.98404_-83.viewer-optimized-v2.zip',
+  'sample-files/Amsterdam_Netherlands.viewer-optimized-v1.zip',
+  'sample-files/Copenhagen_Municipality_Denmark.viewer-optimized-v1.zip',
+  'sample-files/Helsinki_Finland.viewer-optimized-v1.zip',
+  'sample-files/London_United_Kingdom.viewer-optimized-v1.zip',
+  'sample-files/Minneapolis_MN.viewer-optimized-v1.zip',
+  'sample-files/New_York_NY.viewer-optimized-v1.zip',
+  'sample-files/Paris_France.viewer-optimized-v1.zip',
+  'sample-files/Utrecht_Netherlands.viewer-optimized-v1.zip'
 ];
 const GITHUB_SAMPLE_DIRECTORY_API = 'https://api.github.com/repos/tommyblockhead200/bike-friendliness-index/contents/viewer/sample-files?ref=main';
 // The hosted site currently relies on the known sample files below. Keep remote discovery off by default:
 // the manifest/GitHub API probes 404 on the live site and only add noisy failed requests before the real zip load.
 const ENABLE_SAMPLE_DISCOVERY = false;
-let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null, renderTimer = null, viewportRenderTimer = null;
+let map, layers = {}, zoomRenderTimer = null, toleranceTimer = null, renderTimer = null, viewportRenderTimer = null, suppressNextMoveendRefresh = false;
 const canvasRenderer = L.canvas({ padding: 0.5 });
 const dynamicVectors = [];
 const DENSE_POINT_MIN_ZOOM = 12;
@@ -236,20 +329,46 @@ const SPATIAL_INDEX_BUILD_BATCH = 45000;
 let viewportRenderToken = 0;
 const spatialIndexes = new WeakMap();
 const spatialIndexBuilds = new WeakMap();
+const MAP_MIN_ZOOM_DEFAULT = 4;
+const MAP_MIN_ZOOM_CITY = 11;
+const MAP_MIN_ZOOM_ADDRESS = 11;
+
+function currentMapMinZoom(){
+  const ds = activeDataset?.();
+  if (!ds) return MAP_MIN_ZOOM_DEFAULT;
+  return ds.kind === 'address' ? MAP_MIN_ZOOM_ADDRESS : MAP_MIN_ZOOM_CITY;
+}
+function applyMapZoomFloor({ clamp=true } = {}){
+  if (!map) return;
+  const minZoom = currentMapMinZoom();
+  if (map.options.minZoom !== minZoom) map.setMinZoom(minZoom);
+  if (clamp && map.getZoom() < minZoom) map.setZoom(minZoom, { animate:false });
+}
 
 async function initMap(){
-  map = L.map('map', { zoomControl:true, preferCanvas:true }).setView([39.8283,-98.5795], 4);
+  map = L.map('map', { zoomControl:true, preferCanvas:true, minZoom:MAP_MIN_ZOOM_DEFAULT }).setView([39.8283,-98.5795], 4);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom:19, attribution:'&copy; OpenStreetMap contributors &copy; CARTO' }).addTo(map);
   ['boundary','hull','main','points','reach','bad','stress','type','dest'].forEach(k => layers[k] = L.layerGroup().addTo(map));
   map.on('zoomend', () => {
     clearTimeout(zoomRenderTimer);
+    suppressNextMoveendRefresh = true;
     zoomRenderTimer = setTimeout(() => {
+      // Keep zooming/pinch-zooming city-like: Leaflet scales existing vectors,
+      // and we only adjust line weights instead of tearing every address layer down.
       updateDynamicWeightsOnly();
-      scheduleViewportLayerRefresh(70);
       maybeRefreshBikeParkingOverlay();
+      setTimeout(() => { suppressNextMoveendRefresh = false; }, 0);
     }, 60);
   });
-  map.on('moveend', () => scheduleViewportLayerRefresh(110));
+  map.on('moveend', () => {
+    if (suppressNextMoveendRefresh) {
+      suppressNextMoveendRefresh = false;
+      return;
+    }
+    // Address datasets are fully resident and rendered once. Do not rebuild
+    // address linework just because the user pans the map.
+    if (hasPanViewportDependentLayers()) scheduleViewportLayerRefresh(110);
+  });
 
   setSampleStatus('Loading Mackinac Island sample...', 0, 1);
   await loadEmbeddedAnalyses();
@@ -312,6 +431,11 @@ function updateDynamicWeightsOnly(){
 function hasViewportDependentLayers(){
   return !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad || (state.mode === 'address' && state.addressView !== 'none'));
 }
+function hasPanViewportDependentLayers(){
+  // City-scale overlays are intentionally viewport-limited for performance.
+  // Address-scale linework, destinations, and risk points are small enough to keep loaded.
+  return state.mode === 'city' && !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad);
+}
 function scheduleRender(delay=50){
   clearTimeout(renderTimer);
   renderTimer = setTimeout(render, delay);
@@ -322,9 +446,22 @@ function scheduleViewportLayerRefresh(delay=90){
   viewportRenderTimer = setTimeout(() => renderViewportDependentLayers(), delay);
 }
 function renderOverlaysOnly(){
-  renderViewportDependentLayers();
+  renderViewportDependentLayers({ refreshMain:false, refreshOverlays:true });
 }
-function shouldDrawBikeParking(){ return map && map.getZoom() >= BIKE_PARKING_MIN_ZOOM; }
+function syncAddressViewButtons(){
+  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`)?.classList.toggle('active', x===state.addressView));
+}
+function syncOverlayButtons(){
+  ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`)?.classList.toggle('active', state.overlays[k]));
+}
+function setMapBusy(active, text='Updating map…'){
+  const el = document.getElementById('mapBusyIndicator');
+  const label = document.getElementById('mapBusyText');
+  if (!el) return;
+  if (label) label.textContent = text;
+  el.classList.toggle('hidden', !active);
+}
+function shouldDrawBikeParking(){ return !!(state.detailOverride || (map && map.getZoom() >= BIKE_PARKING_MIN_ZOOM)); }
 function isBikeParkingPoi(p){ return Number(p?.weight) === 0.25 || /bike[_\s-]?parking|bicycle[_\s-]?parking/i.test(String(p?.type || p?.name || '')); }
 function maybeRefreshBikeParkingOverlay(){
   const visible = shouldDrawBikeParking();
@@ -434,31 +571,69 @@ function sampleItems(items, cap){
   for (let i = 0; i < cap; i++) out.push(items[Math.floor(i * step)]);
   return out;
 }
-function visibleLineCap(kind, bucket=''){
-  const z = map?.getZoom?.() || 10;
-  const lightDetail = ['walking','services','crossings','gray'].includes(bucket);
-  if (kind === 'addressRoutes') return z < 11 ? 5000 : z < 12 ? 12000 : z < 13 ? 28000 : z < 14 ? 55000 : 90000;
-  if (kind === 'addressGradient') return z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 40000 : z < 13 ? 80000 : z < 14 ? 150000 : 240000;
-  if (kind === 'stress') return z < 10 ? 9000 : z < 11 ? 20000 : z < 12 ? 45000 : z < 13 ? 90000 : z < 14 ? 160000 : 260000;
+function capMultiplierForBucket(kind, bucket=''){
   if (kind === 'type') {
-    const base = z < 10 ? 8000 : z < 11 ? 18000 : z < 12 ? 42000 : z < 13 ? 85000 : z < 14 ? 150000 : 240000;
-    return lightDetail ? Math.floor(base * 0.45) : base;
+    if (bucket === 'paths' || bucket === 'lanes') return 1.55;
+    if (bucket === 'friendly') return 1.25;
+    if (bucket === 'roads') return 0.70;
+    if (bucket === 'others') return 0.55;
+    if (bucket === 'walking' || bucket === 'services' || bucket === 'crossings') return 0.45;
   }
-  return z < 11 ? 10000 : z < 13 ? 40000 : 120000;
+  if (kind === 'stress') {
+    if (bucket === 'low') return 1.45;
+    if (bucket === 'med') return 1.20;
+    if (bucket === 'high') return 0.75;
+    if (bucket === 'extreme') return 0.62;
+    if (bucket === 'critical') return 0.55;
+    if (bucket === 'gray') return 0.45;
+  }
+  return 1;
+}
+function prioritySampleItems(items, cap, scoreFn){
+  if (!items || !items.length) return [];
+  if (!cap || !Number.isFinite(cap) || items.length <= cap) return items;
+  return [...items].sort((a,b)=>(scoreFn(b)||0)-(scoreFn(a)||0)).slice(0, cap);
+}
+function visibleLineCap(kind, bucket=''){
+  const z = map?.getZoom?.() || 11;
+  if (state.detailOverride) return Infinity;
+
+  // Address analyses are much smaller than city analyses, so keep address linework complete.
+  // The async/yielded renderer keeps the UI responsive without hiding data.
+  if (kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'))) {
+    return Infinity;
+  }
+
+  let base;
+  if (kind === 'stress') {
+    base = z < 13 ? 112000 : z < 14 ? 198000 : z < 15 ? 325000 : z < 16 ? 480000 : 650000;
+  } else if (kind === 'type') {
+    base = z < 13 ? 108000 : z < 14 ? 190000 : z < 15 ? 310000 : z < 16 ? 465000 : 635000;
+  } else {
+    base = z < 13 ? 56000 : z < 14 ? 120000 : z < 15 ? 225000 : 360000;
+  }
+  return Math.max(1000, Math.floor(base * capMultiplierForBucket(kind, bucket)));
 }
 function pointCap(kind){
-  const z = map?.getZoom?.() || 10;
-  if (kind === 'dest') return z < 11 ? 700 : z < 12 ? 1400 : z < 13 ? 3000 : z < 14 ? 6000 : 12000;
-  return z < 11 ? 1000 : z < 13 ? 4000 : 12000;
+  if (state.mode === 'address' || state.detailOverride) return Infinity;
+  const z = map?.getZoom?.() || 11;
+  if (kind === 'dest') return z < 12 ? 45000 : z < 13 ? 70000 : Infinity;
+  if (kind === 'bad') return z < 12 ? 25000 : z < 13 ? 40000 : Infinity;
+  return Infinity;
 }
 function minZoomForTypeBucket(bucket){
+  if (state.detailOverride) return 0;
   if (bucket === 'crossings') return 13;
   if (bucket === 'walking' || bucket === 'services') return 12;
-  if (bucket === 'others') return 10;
+  if (bucket === 'others') return 11;
   return 0;
 }
 async function visibleItemsForLines(items, token, kind, bucket='', getLine=itemLine){
   if (!items?.length) return { selected:[], visibleCount:0, sourceCount:0, capped:false };
+  const addressLineKind = kind === 'addressRoutes' || kind === 'addressGradient' || (state.mode === 'address' && (kind === 'type' || kind === 'stress'));
+  if (addressLineKind) {
+    return { selected:items, visibleCount:items.length, sourceCount:items.length, capped:false };
+  }
   const idx = await buildSpatialIndex(items, getLine);
   if (token !== viewportRenderToken) return null;
   const cap = visibleLineCap(kind, bucket);
@@ -582,7 +757,7 @@ function optimizedPairsForStress(store, bucket){
 }
 async function drawOptimizedTypeBucketsAsync(store, layer, overlay, token, notes){
   if (!validOptimizedCityLines(store)) return;
-  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const defs = [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]];
   const z = map?.getZoom?.() || 10;
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
@@ -597,7 +772,7 @@ async function drawOptimizedTypeBucketsAsync(store, layer, overlay, token, notes
 }
 async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, notes){
   if (!validOptimizedCityLines(store)) return;
-  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  const defs = [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]];
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
     const pairs = optimizedPairsForStress(store, k);
@@ -609,7 +784,13 @@ async function drawOptimizedStressBucketsAsync(store, layer, overlay, token, not
 }
 
 function validOptimizedAddressLines(store){
-  return !!(store && store.format === 'flat-address-grid-v1' && Array.isArray(store.cells) && Array.isArray(store.tolerances));
+  return !!(store && /^flat-address-grid-v\d+$/.test(String(store.format || '')) && Array.isArray(store.cells) && Array.isArray(store.tolerances));
+}
+function validOptimizedAddressTypeLines(store){
+  return validOptimizedAddressLines(store) && Array.isArray(store.typeBuckets);
+}
+function validOptimizedAddressStressLines(store){
+  return validOptimizedAddressLines(store) && Array.isArray(store.stressBuckets);
 }
 function addressGridIndex(store){
   if (!validOptimizedAddressLines(store)) return null;
@@ -636,35 +817,41 @@ function unpackTolNibble(pack, tolIdx){
   return v ? v - 1 : -1;
 }
 function addressRouteBucketWeight(bucket){
-  if (bucket < 2) return 1;
-  if (bucket < 4) return 1.6;
-  if (bucket < 7) return 2.4;
-  if (bucket < 10) return 3.5;
-  if (bucket < 13) return 4.8;
-  return 6;
+  // Slightly stronger route emphasis: thin lines remain visible, while high-flow
+  // route buckets are meaningfully thicker. The global dynamicWeight() still
+  // handles zoom scaling.
+  let base;
+  if (bucket < 2) base = 0.26;
+  else if (bucket < 4) base = 0.34;
+  else if (bucket < 7) base = 0.48;
+  else if (bucket < 10) base = 0.68;
+  else if (bucket < 13) base = 0.92;
+  else base = 1.22;
+  const z = map?.getZoom?.() || 12;
+  const zoomScale = z <= 11 ? 0.78 : z < 13 ? 0.88 : z < 15 ? 0.98 : 1.08;
+  return Math.max(0.22, base * zoomScale);
+}
+function routeColorForBucket(bucket){
+  const x = Number(bucket) || 0;
+  const t = Math.max(0, Math.min(1, x <= 1 ? x : x / 14));
+  const hue = Math.round(145 - t * 10);
+  const saturation = Math.round(70 - t * 4);
+  const lightness = Math.round(50 - t * 9);
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 function queryAddressGridCells(store){
   const idx = addressGridIndex(store);
   if (!idx) return [];
-  const b = paddedMapBounds();
-  const cs = idx.cellDegrees || SPATIAL_INDEX_CELL_DEG;
-  const minX = Math.floor(b.south / cs), maxX = Math.floor(b.north / cs);
-  const minY = Math.floor(b.west / cs), maxY = Math.floor(b.east / cs);
-  const cells = [];
-  for (let x = minX; x <= maxX; x++) {
-    for (let y = minY; y <= maxY; y++) {
-      const cell = idx.map.get(`${x},${y}`);
-      if (cell) cells.push(cell);
-    }
-  }
-  return cells;
+  // Address analyses are intentionally rendered as a complete local dataset.
+  // No viewport slicing: panning should feel like city viewing, not like a reload.
+  return [...idx.map.values()];
 }
 function collectOptimizedAddressGroups(store, mode, notes){
   const tolIdx = currentAddressTolIndex(store);
   const cells = queryAddressGridCells(store);
   const scale = Number(store.scale) || 10000000;
   const capKind = mode === 'gradient' ? 'addressGradient' : mode === 'routes' ? 'addressRoutes' : mode;
-  const cap = visibleLineCap(capKind, '');
+  const cap = visibleLineCap(capKind, mode);
   const refs = [];
   let total = 0;
   const z = map?.getZoom?.() || 10;
@@ -722,9 +909,10 @@ async function drawOptimizedAddressRoutesAsync(store, layer, overlay, token, not
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'routes', notes);
   if (token !== viewportRenderToken) return;
-  for (const [bucket, lines] of result.groups) {
+  const entries = [...result.groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0]));
+  for (const [bucket, lines] of entries) {
     if (token !== viewportRenderToken) return;
-    addDynamicPolyline(lines, { color:'#16a34a', baseWeight:addressRouteBucketWeight(bucket), opacity:.55 }, layer, overlay);
+    addDynamicPolyline(lines, { color:routeColorForBucket(bucket), baseWeight:addressRouteBucketWeight(bucket), opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay);
     await yieldFrame();
   }
 }
@@ -732,7 +920,7 @@ async function drawOptimizedAddressTypeBucketsAsync(store, layer, overlay, token
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'type', notes);
   const defs = { paths:['#16a34a',1.7], lanes:['#2563eb',1.7], friendly:['#ffee58',1.4], roads:['#ef4444',1], others:['#b38804',1], walking:['#9ca3af',.35], services:['#4b5563',.35], crossings:['#22d3ee',.8] };
-  const order = ['paths','lanes','friendly','roads','others','walking','services','crossings'];
+  const order = ['others','roads','services','walking','crossings','friendly','lanes','paths'];
   for (const bucket of order) {
     if (token !== viewportRenderToken) return;
     const code = store.typeBuckets?.indexOf(bucket);
@@ -747,7 +935,7 @@ async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, tok
   if (!validOptimizedAddressLines(store)) return;
   const result = collectOptimizedAddressGroups(store, 'stress', notes);
   const defs = { low:['#2da15f',1], med:['#b3bf43',1], high:['#b07317',1], extreme:['#b04848',1], critical:['#610909',1], gray:['#4b5563',.35] };
-  for (const bucket of ['low','med','high','extreme','critical','gray']) {
+  for (const bucket of ['gray','critical','extreme','high','med','low']) {
     if (token !== viewportRenderToken) return;
     const code = store.stressBuckets?.indexOf(bucket);
     const lines = result.groups.get(code);
@@ -760,11 +948,11 @@ async function drawOptimizedAddressStressBucketsAsync(store, layer, overlay, tok
 
 function routeWeight(flow){ return Math.max(1, Math.log(flow || 1) * 1.2); }
 function routeWeightBin(weight){
-  if (weight < 1.5) return 1;
-  if (weight < 2.3) return 2;
-  if (weight < 3.3) return 3;
-  if (weight < 4.8) return 4.2;
-  return 6;
+  if (weight < 1.5) return 0.28;
+  if (weight < 2.3) return 0.40;
+  if (weight < 3.3) return 0.58;
+  if (weight < 4.8) return 0.82;
+  return 1.10;
 }
 function fmt(n, dec=1){ return Number.isFinite(+n) ? (+n).toFixed(dec) : '0'; }
 function formatCoordinateAddressLabel(value, decimals=4){
@@ -837,6 +1025,7 @@ function prettifySampleLabel(name){
   return base
     .replace(/\.zip$/i, '')
     .replace(/\.viewer-pruned(?:\.v\d+)?$/i, '')
+    .replace(/\.viewer-optimized-v\d+$/i, '')
     .replace(/_/g, ' ')
     .trim() || name;
 }
@@ -844,7 +1033,7 @@ function prettifySampleLabel(name){
 function sampleKey(entry){
   let raw = String(entry?.name || entry?.url || '').toLowerCase();
   try { raw = decodeURIComponent(raw); } catch {}
-  return raw.replace(/copenhagen_municipality_denmark\.viewer-pruned\.zip$/i, 'copenhagen_denmark.viewer-pruned.zip');
+  return raw;
 }
 
 function isLegacyCopenhagenEntry(entry){
@@ -868,7 +1057,7 @@ function addSampleEntries(target, entries){
       target.set(key, entry);
     } else {
       const existing = target.get(key);
-      // Prefer the current Copenhagen filename over a stale manifest entry using the old Municipality name.
+      // Prefer a clearly labeled Copenhagen entry if discovery ever returns duplicates.
       if (isLegacyCopenhagenEntry(existing) && !isLegacyCopenhagenEntry(entry)) target.set(key, entry);
       else if (entry.label && !existing.label) existing.label = entry.label;
     }
@@ -922,6 +1111,9 @@ async function resolveSampleFiles(){
 
 function nextPaint(){
   return new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+}
+function yieldFrame(){
+  return nextPaint();
 }
 
 function pendingSampleEntries(){
@@ -1554,9 +1746,17 @@ function setFocus(f){
   else scheduleRender(80);
 }
 function setAddressView(v){
+  if (v !== 'none' && gatedLimitedFeature()) return;
   state.addressView=v;
-  ['none','gradient','routes'].forEach(x=>document.getElementById(`view-${x}`).classList.toggle('active', x===v));
-  renderViewportDependentLayers();
+  if (state.mode === 'address' && v !== 'none') {
+    state.overlays.type = false;
+    state.overlays.stress = false;
+    clearLayerByKey('type');
+    clearLayerByKey('stress');
+  }
+  syncAddressViewButtons();
+  syncOverlayButtons();
+  renderViewportDependentLayers({ refreshMain:true, refreshOverlays:true });
 }
 function setCityAggregation(v){ state.cityAgg=v; document.getElementById('agg-citywide').classList.toggle('active', v==='citywide'); document.getElementById('agg-best').classList.toggle('active', v==='best'); scheduleRender(80); }
 function setPointsView(v){ state.pointsView=v; ['rank','score','hide'].forEach(x=>document.getElementById(`points-${x}`).classList.toggle('active', x===v)); scheduleRender(80); }
@@ -1567,11 +1767,22 @@ function setTolerance(v){
   toleranceTimer = setTimeout(render, 220);
 }
 function toggleOverlay(name){
+  if (gatedLimitedFeature()) return;
   state.overlays[name]=!state.overlays[name];
-  if (name === 'stress' && state.overlays.stress) state.overlays.type = false;
-  if (name === 'type' && state.overlays.type) state.overlays.stress = false;
-  ['type','stress','dest','bad'].forEach(k => document.getElementById(`ov-${k}`).classList.toggle('active', state.overlays[k]));
-  renderOverlaysOnly();
+  let refreshMain = false;
+  if (name === 'stress' && state.overlays.stress) {
+    state.overlays.type = false;
+    if (state.mode === 'address') { state.addressView = 'none'; refreshMain = true; }
+  }
+  if (name === 'type' && state.overlays.type) {
+    state.overlays.stress = false;
+    if (state.mode === 'address') { state.addressView = 'none'; refreshMain = true; }
+  }
+  if (name === 'dest' && state.overlays.dest) state.overlays.bad = false;
+  if (name === 'bad' && state.overlays.bad) state.overlays.dest = false;
+  syncAddressViewButtons();
+  syncOverlayButtons();
+  renderViewportDependentLayers({ refreshMain, refreshOverlays:true });
 }
 
 function score(m, focus=state.focus){
@@ -1632,11 +1843,13 @@ function currentMetrics(){
 function render(){
   resetLayers();
   const ds = activeDataset();
-  if (!ds) { updateStats(null); document.getElementById('legend').innerHTML = ''; return; }
+  if (!ds) { applyMapZoomFloor({ clamp:false }); updateStats(null); document.getElementById('legend').innerHTML = ''; setMapBusy(false); return; }
+  applyMapZoomFloor({ clamp:false });
   const data = ds.data, m = currentMetrics();
   updateStats(m);
   drawBoundary(data);
   if (ds.kind === 'address') drawAddress(data, m); else drawCity(data, m);
+  applyMapZoomFloor({ clamp:true });
   state.autoFitPending = false;
   renderViewportDependentLayers();
 }
@@ -1743,8 +1956,7 @@ function samplePopup(s, inSubset){
     ['# destinations', destinationCount(s)],
     ['Destination score', fmtView(s.destScore)],
     ['Risk', `${fmtView(riskCount)} intersections · ${fmtView(s.badIntPerMi)}/mi`],
-    ['Furthest reaches', reachSummary(s)],
-    ['Score breakdown', scoreBreakdownHtml(s)]
+    ['Furthest reaches', reachSummary(s)]
   ];
   return `<div class="popup-title">${fmtView(focusScore)} <span style="color:#64748b">(${escapeHtml(state.focus)})</span></div>${popupRows(rows)}`;
 }
@@ -1833,7 +2045,7 @@ function drawRoutes(lines, layer, overlay=false){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:routeColorForBucket(w), baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 async function drawRoutesAsync(lines, layer, overlay, token, notes){
   const result = await visibleItemsForLines(lines || [], token, 'addressRoutes', 'routes', item => item?.seg);
@@ -1846,7 +2058,7 @@ async function drawRoutesAsync(lines, layer, overlay, token, notes){
     if (!groups.has(w)) groups.set(w, []);
     groups.get(w).push(l.seg);
   });
-  groups.forEach((segs, w) => addDynamicPolyline(segs, { color:'#16a34a', baseWeight:+w, opacity:.55 }, layer, overlay));
+  [...groups.entries()].sort((a,b)=>Number(a[0])-Number(b[0])).forEach(([w, segs]) => addDynamicPolyline(segs, { color:routeColorForBucket(w), baseWeight:+w, opacity:1, lineCap:'round', lineJoin:'round' }, layer, overlay));
 }
 function drawReachPoints(m){
   (m.reachPoints||[]).slice(0,3).forEach((p,i)=>{
@@ -1870,45 +2082,80 @@ function cityRankDisclaimer(data){
   return noteBlock('Ranking note', `Because ${Math.round(100 * best / scores.length)}% of calculated points are within a 5 point range, treat these rankings with a grain of salt.`);
 }
 
-async function renderViewportDependentLayers(){
+
+function largeCityWarning(showZoomDetail=false){
+  const override = !!state.detailOverride;
+  const suffix = (!override && showZoomDetail) ? ' <b>Zoom in for more detail.</b>' : '';
+  const msg = override
+    ? 'Full detail override is on. Panning/zooming may lag on large samples.'
+    : `Please be patient when panning/zoom. To help with performance, detail is reduced when zoomed out.${suffix}`;
+  const btnLabel = override ? 'Auto detail' : 'Full detail';
+  const activeClass = override ? ' active' : '';
+  return `<div class="note-block"><div class="large-warning-head"><div class="note-title">Large city warning</div><button class="detail-override-btn${activeClass}" onclick="toggleDetailOverride()">${btnLabel}</button></div>${msg}</div>`;
+}
+function toggleDetailOverride(){
+  state.detailOverride = !state.detailOverride;
+  renderViewportDependentLayers();
+}
+
+
+async function renderViewportDependentLayers(options={}){
+  const refreshMain = options.refreshMain !== false;
+  const refreshOverlays = options.refreshOverlays !== false;
   const token = ++viewportRenderToken;
-  clearViewportDynamicLayers();
+  if (refreshMain) clearLayerByKey('main');
+  if (refreshOverlays) clearOverlayLayers();
+
   const ds = activeDataset();
-  if (!ds) return;
+  if (!ds) { setMapBusy(false); return; }
+  const shouldRenderMain = refreshMain && ds.kind === 'address' && state.addressView !== 'none';
+  const shouldRenderOverlays = refreshOverlays && !!(state.overlays.type || state.overlays.stress || state.overlays.dest || state.overlays.bad);
+  setMapBusy(shouldRenderMain || shouldRenderOverlays, 'Updating map…');
+
   const data = ds.data;
   const m = currentMetrics();
   const keys = [];
+  const warnings = [];
   const notes = { capped:false, hiddenDetail:false };
-  const pointKey = cityPointKey();
-  if (pointKey) keys.push(pointKey);
-  const rankNote = cityRankDisclaimer(data);
-  if (rankNote) keys.push(rankNote);
-  if (hasViewportDependentLayers()) {
-    keys.push(noteBlock('Performance mode', 'Large line and point layers are drawn near the current map view, with reduced detail when zoomed far out. Pan or zoom, then pause briefly to refresh nearby detail.'));
-    document.getElementById('legend').innerHTML = keys.join('') + noteBlock('Rendering', 'Updating visible map detail…');
-  } else {
-    document.getElementById('legend').innerHTML = keys.join('');
-  }
 
-  if (ds.kind === 'address' && m) {
-    const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
-    if (state.addressView === 'gradient') {
-      if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
-      else await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+  try {
+    const pointKey = cityPointKey();
+    if (pointKey) keys.push(pointKey);
+    const rankNote = cityRankDisclaimer(data);
+    if (rankNote) warnings.push(rankNote);
+    if (shouldRenderMain || shouldRenderOverlays) {
+      const renderNote = noteBlock('Rendering', state.mode === 'address' ? 'Drawing address detail…' : 'Updating visible map detail…');
+      const detailNote = state.mode === 'city' ? largeCityWarning(false) : '';
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + detailNote + renderNote;
+    } else {
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
     }
-    if (state.addressView === 'routes') {
-      if (optimizedAddressLines) await drawOptimizedAddressRoutesAsync(optimizedAddressLines, layers.main, false, token, notes);
-      else await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
-    }
-  }
 
-  await drawOverlaysAsync(data, m, token, keys, notes);
-  if (token !== viewportRenderToken) return;
-  if (notes.hiddenDetail) keys.push(noteBlock('Low-priority detail hidden', 'Walking, service, crossings, or very dense points are held back until you zoom in more.'));
-  if (notes.capped) keys.push(noteBlock('Detail capped', 'Some dense layers are sampled at this zoom level. Zoom in for more complete detail.'));
-  document.getElementById('legend').innerHTML = keys.join('');
+    if (shouldRenderMain && m) {
+      const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
+      if (state.addressView === 'gradient') {
+        if (optimizedAddressLines) await drawOptimizedAddressGradientAsync(optimizedAddressLines, layers.main, false, token, notes);
+        else await drawGradientAsync(m.lines?.gradient, layers.main, false, token, notes);
+      }
+      if (state.addressView === 'routes') {
+        if (optimizedAddressLines) await drawOptimizedAddressRoutesAsync(optimizedAddressLines, layers.main, false, token, notes);
+        else await drawRoutesAsync(m.flowLines, layers.main, false, token, notes);
+      }
+    }
+
+    if (refreshOverlays) await drawOverlaysAsync(data, m, token, keys, notes);
+    if (token !== viewportRenderToken) return;
+    if (notes.capped || notes.hiddenDetail) warnings.push(largeCityWarning(true));
+    document.getElementById('legend').innerHTML = keys.join('') + warnings.join('');
+  } catch (err) {
+    console.error('Viewport layer render failed:', err);
+    if (token === viewportRenderToken) {
+      document.getElementById('legend').innerHTML = keys.join('') + warnings.join('') + noteBlock('Rendering error', escapeHtml(err?.message || String(err)));
+    }
+  } finally {
+    if (token === viewportRenderToken) setMapBusy(false);
+  }
 }
-
 async function drawOverlaysAsync(data, m, token, keys, notes){
   const optimizedCityLines = validOptimizedCityLines(data.cityLineSegments) ? data.cityLineSegments : null;
   const optimizedAddressLines = validOptimizedAddressLines(data.addressLineSegments) ? data.addressLineSegments : null;
@@ -1917,7 +2164,7 @@ async function drawOverlaysAsync(data, m, token, keys, notes){
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedTypeBucketsAsync(optimizedCityLines, layers.type, true, token, notes);
     else if (state.mode === 'city' && c) await drawTypeBucketsAsync(c, layers.type, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressTypeBucketsAsync(optimizedAddressLines, layers.type, true, token, notes);
+    if (state.mode === 'address' && validOptimizedAddressTypeLines(optimizedAddressLines)) await drawOptimizedAddressTypeBucketsAsync(optimizedAddressLines, layers.type, true, token, notes);
     else if (state.mode === 'address' && m?.lines?.classification) await drawTypeBucketsAsync(m.lines.classification, layers.type, true, token, notes);
     keys.push(keyBlock('Network Type', [['Paths','#16a34a'], ['Lanes','#2563eb'], ['Friendly','#ffee58'], ['Roads','#ef4444'], ['Other','#b38804'], ['Walking/service','#9ca3af']]));
   }
@@ -1927,41 +2174,60 @@ async function drawOverlaysAsync(data, m, token, keys, notes){
     if (state.mode === 'city' && optimizedCityLines) await drawOptimizedStressBucketsAsync(optimizedCityLines, layers.stress, true, token, notes);
     else if (state.mode === 'city' && cityStress) await drawStressBucketsAsync(cityStress, layers.stress, true, token, notes);
     if (token !== viewportRenderToken) return;
-    if (state.mode === 'address' && optimizedAddressLines) await drawOptimizedAddressStressBucketsAsync(optimizedAddressLines, layers.stress, true, token, notes);
+    if (state.mode === 'address' && validOptimizedAddressStressLines(optimizedAddressLines)) await drawOptimizedAddressStressBucketsAsync(optimizedAddressLines, layers.stress, true, token, notes);
     else if (state.mode === 'address' && addrStress) await drawStressBucketsAsync(addrStress, layers.stress, true, token, notes);
     keys.push(keyBlock('Stress Heatmap', [['Low','#2da15f'], ['Medium','#b3bf43'], ['High','#b07317'], ['Extreme','#b04848'], ['Critical','#610909'], ['Other','#4b5563']]));
   }
   if (state.overlays.dest) drawDestinationsOverlay(data, m, keys, notes);
   if (state.overlays.bad) drawBadOverlay(data, m, keys, notes);
 }
+function destinationPriority(p){
+  if (isBikeParkingPoi(p)) return 0;
+  const w = Number(p?.weight) || 1;
+  if (w >= 3) return 4;
+  if (w === 2) return 3;
+  return 2;
+}
 function drawDestinationsOverlay(data, m, keys, notes){
   const rawPois = state.mode === 'address' && m?.reachedIndices ? m.reachedIndices.map(i => data.lastPois?.[i]).filter(Boolean) : (data.lastPois || []);
-  const bounds = paddedMapBounds();
-  const bikeParkingVisible = shouldDrawBikeParking();
-  let bikeParkingHidden = 0;
+  const bounds = state.mode === 'address' ? null : paddedMapBounds();
+  const bikeParkingVisible = state.mode === 'address' ? true : shouldDrawBikeParking();
   const visible = [];
+  let hiddenBikeParking = 0;
   rawPois.forEach(p => {
+    if (bounds && !pointLikeInBounds(p, bounds)) return;
     const isBikeParking = isBikeParkingPoi(p);
-    if (isBikeParking && !bikeParkingVisible) { bikeParkingHidden++; return; }
-    if (pointLikeInBounds(p, bounds)) visible.push(p);
+    if (isBikeParking && !bikeParkingVisible) { hiddenBikeParking++; return; }
+    visible.push(p);
   });
-  const selected = sampleItems(visible, pointCap('dest'));
+  if (hiddenBikeParking > 0) notes.hiddenDetail = true;
+  const cap = pointCap('dest');
+  const selected = prioritySampleItems(visible, cap, destinationPriority);
   if (visible.length > selected.length) notes.capped = true;
+  selected.sort((a,b) => destinationPriority(a) - destinationPriority(b));
   selected.forEach(p => {
     const col = p.weight >= 3 ? '#c221fc' : p.weight === 2 ? '#5d52f2' : p.weight === .25 ? '#e0a607' : '#6faeed';
     L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius:5, fillColor:col, color:'#fff', weight:1.5, fillOpacity:.95 })
       .bindPopup(`${escapeHtml(p.name||'Destination')}<br>${escapeHtml(p.type||'')}`)
       .addTo(layers.dest);
   });
-  if (bikeParkingHidden) keys.push(noteBlock('Bike parking hidden', `${bikeParkingHidden.toLocaleString()} bike parking points hidden until zoom level ${BIKE_PARKING_MIN_ZOOM}+.`));
   keys.push(keyBlock('Destinations', [['Highest value','#c221fc'], ['High value','#5d52f2'], ['Standard','#6faeed'], ['Bike parking','#e0a607']]));
 }
+
 function drawBadOverlay(data, m, keys, notes){
   const pts = state.mode === 'city' ? (data.cityGlobalBadInts||[]) : (m?.badIntersections||[]);
-  const bounds = paddedMapBounds();
-  const visible = pts.filter(p => pointLikeInBounds(p, bounds));
-  const selected = sampleItems(visible, pointCap('bad'));
+  const bounds = state.mode === 'address' ? null : paddedMapBounds();
+  const visible = bounds ? pts.filter(p => pointLikeInBounds(p, bounds)) : pts;
+  const selected = prioritySampleItems(visible, pointCap('bad'), p => {
+    const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
+    return Number(pen) || 0;
+  });
   if (visible.length > selected.length) notes.capped = true;
+  selected.sort((a,b) => {
+    const pa = a.penalty ?? (a.speed>=40 ? 1 : a.speed>=30 ? .5 : .2);
+    const pb = b.penalty ?? (b.speed>=40 ? 1 : b.speed>=30 ? .5 : .2);
+    return (Number(pa)||0) - (Number(pb)||0);
+  });
   selected.forEach(p => {
     const pen = p.penalty ?? (p.speed>=40 ? 1 : p.speed>=30 ? .5 : .2);
     L.circleMarker([p.lat,p.lon], { renderer: canvasRenderer, radius: pen<.5?4:7, fillColor: pen<.5?'#f59e0b':'#ef4444', color:pen<.5?'#b45309':'#7f1d1d', weight:2, fillOpacity:.95 })
@@ -1970,6 +2236,7 @@ function drawBadOverlay(data, m, keys, notes){
   });
   keys.push(keyBlock('Higher Risk Intersections', [['Lower penalty','#f59e0b'], ['Higher penalty','#ef4444']]));
 }
+
 function cityPointKey(){
   if (state.mode !== 'city' || state.pointsView !== 'rank') return '';
   if (state.cityAgg === 'best') {
@@ -1984,19 +2251,19 @@ function noteBlock(title, text){
   return `<div class="note-block"><div class="note-title">${title}</div>${text}</div>`;
 }
 async function drawStressBucketsAsync(b, layer, overlay, token, notes){
-  const defs = [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]];
+  const defs = [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]];
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
     if(b[k]?.length) await drawLineBucketAsync(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay, token, 'stress', k, notes);
   }
 }
 function drawStressBuckets(b, layer, overlay=false){
-  [['low','#2da15f',1],['med','#b3bf43',1],['high','#b07317',1],['extreme','#b04848',1],['critical','#610909',1],['gray','#4b5563',.35]].forEach(([k,c,r])=>{
+  [['gray','#4b5563',.35],['critical','#610909',1],['extreme','#b04848',1],['high','#b07317',1],['med','#b3bf43',1],['low','#2da15f',1]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.62 }, layer, overlay);
   });
 }
 async function drawTypeBucketsAsync(b, layer, overlay, token, notes){
-  const defs = [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]];
+  const defs = [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]];
   const z = map?.getZoom?.() || 10;
   for (const [k,c,r] of defs) {
     if (token !== viewportRenderToken) return;
@@ -2005,7 +2272,7 @@ async function drawTypeBucketsAsync(b, layer, overlay, token, notes){
   }
 }
 function drawTypeBuckets(b, layer, overlay=false){
-  [['paths','#16a34a',1.7],['lanes','#2563eb',1.7],['friendly','#ffee58',1.4],['roads','#ef4444',1],['others','#b38804',1],['walking','#9ca3af',.35],['services','#4b5563',.35],['crossings','#22d3ee',.8]].forEach(([k,c,r])=>{
+  [['others','#b38804',1],['roads','#ef4444',1],['services','#4b5563',.35],['walking','#9ca3af',.35],['crossings','#22d3ee',.8],['friendly','#ffee58',1.4],['lanes','#2563eb',1.7],['paths','#16a34a',1.7]].forEach(([k,c,r])=>{
     if(b[k]?.length) addDynamicPolyline(b[k], { color:c, baseWeight:r, opacity:.65 }, layer, overlay);
   });
 }
@@ -2017,33 +2284,39 @@ function reportedDeviceMemoryGb(){
 function assessDeviceSupport(){
   const width = Math.round(window.innerWidth || document.documentElement.clientWidth || screen.width || 0);
   const memory = reportedDeviceMemoryGb();
-  const blockReasons = [];
-  const warningReasons = [];
+  const reasons = [];
 
-  if (width < 700) blockReasons.push(`window width is ${width}px; at least 700px is required`);
-  else if (width < 1000) warningReasons.push(`window width is ${width}px; 1000px or wider is recommended`);
-
-  if (memory !== null && memory < 8) blockReasons.push(`browser-reported RAM is ${memory} GB; at least 8 GB is required`);
-  else if (memory !== null && memory < 12) warningReasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
+  if (width < 1000) reasons.push(`window width is ${width}px; 1000px or wider is recommended`);
+  if (memory !== null && memory < 12) reasons.push(`browser-reported RAM is ${memory} GB; 12 GB or more is recommended`);
 
   return {
-    level: blockReasons.length ? 'block' : (warningReasons.length ? 'warn' : 'ok'),
+    level: reasons.length ? 'limited' : 'ok',
     width,
     memory,
-    reasons: blockReasons.length ? blockReasons : warningReasons
+    reasons
   };
+}
+function updateLimitedFeatureButtons(){
+  const limited = !!state.deviceLimited;
+  ['view-gradient','view-routes','ov-type','ov-stress','ov-dest','ov-bad'].forEach(id => {
+    document.getElementById(id)?.classList.toggle('limited-feature', limited);
+  });
 }
 function startViewerOnce(){
   if (state.mapInitStarted) return;
   state.mapInitStarted = true;
   initMap();
 }
-function showMobileWarningIfNeeded(){
+function showMobileWarningIfNeeded(options={}){
   const modal = document.getElementById('mobileWarningModal');
   if (!modal) return false;
   const assessment = assessDeviceSupport();
-  state.deviceGate = assessment.level;
-  if (assessment.level === 'ok') return false;
+  const manual = !!options.manual;
+  const limited = assessment.level === 'limited' || state.deviceLimited;
+  state.deviceLimited = limited;
+  state.deviceGate = limited ? 'limited' : 'ok';
+  updateLimitedFeatureButtons();
+  if (!limited && !manual) return false;
 
   const panel = document.getElementById('deviceWarningPanel');
   const eyebrow = document.getElementById('deviceWarningEyebrow');
@@ -2052,39 +2325,32 @@ function showMobileWarningIfNeeded(){
   const details = document.getElementById('deviceWarningDetails');
   const actions = document.getElementById('deviceWarningActions');
 
+  panel?.classList.remove('border-red-500/60');
+  panel?.classList.add('border-yellow-500/60');
+  if (eyebrow) { eyebrow.textContent = 'Computer recommended'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
+  if (title) title.textContent = 'More features are available on a computer.';
+  if (body) body.textContent = 'This viewer works best on a computer with a wide screen and plenty of memory. If you are already on a computer, widen your browser window. On this device, heavy address map modes and overlays are disabled to keep the basic viewer usable.';
   if (details) {
-    details.innerHTML = '';
-    details.classList.add('hidden');
+    details.innerHTML = assessment.reasons?.length ? assessment.reasons.map(escapeHtml).join('<br>') : 'Use a computer or wider screen for overlays, address routes, address gradients, and dense analysis layers.';
+    details.classList.remove('hidden');
   }
-
-  if (assessment.level === 'block') {
-    panel?.classList.remove('border-yellow-500/60');
-    panel?.classList.add('border-red-500/60');
-    if (eyebrow) { eyebrow.textContent = 'Not Supported'; eyebrow.className = 'text-red-300 text-xs font-black uppercase tracking-wide mb-2'; }
-    if (title) title.textContent = 'This viewer cannot currently run in this browser.';
-    if (body) body.textContent = 'The viewer needs a window at least 700px wide, and at least 8 GB of RAM on your device due to the large size of the analysis files. Try switching to a computer or widening your browser window.';
-    actions?.classList.add('hidden');
-  } else {
-    panel?.classList.remove('border-red-500/60');
-    panel?.classList.add('border-yellow-500/60');
-    if (eyebrow) { eyebrow.textContent = 'Warning'; eyebrow.className = 'text-yellow-300 text-xs font-black uppercase tracking-wide mb-2'; }
-    if (title) title.textContent = 'This viewer may be hard to use, slow, or unstable for you.';
-    if (body) body.textContent = 'The viewer works best with a window at least 1000px wide, and at least 12 GB of RAM on your device. Use a computer or widen your window if possible.';
-    actions?.classList.remove('hidden');
-  }
+  actions?.classList.remove('hidden');
 
   modal.classList.remove('hidden');
   modal.classList.add('flex');
   return true;
 }
 function dismissMobileWarning(){
-  if (state.deviceGate !== 'warn') return;
   const modal = document.getElementById('mobileWarningModal');
   if (!modal) return;
   modal.classList.add('hidden');
   modal.classList.remove('flex');
-  state.deviceGate = 'ok';
   startViewerOnce();
+}
+function gatedLimitedFeature(){
+  if (!state.deviceLimited) return false;
+  showMobileWarningIfNeeded({ manual:true });
+  return true;
 }
 window.addEventListener('load', () => {
   const gateShown = showMobileWarningIfNeeded();
