@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>The Bike Friendliness Index</title>  <!-- bug fixes-->
+    <title>The Bike Friendliness Index</title>
     <script src="https://cdn.plot.ly/plotly-3.5.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <link
@@ -36,10 +36,10 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        padding: 5px 0; /* Removed wasted right padding to give filters more room */
+        padding: 5px 0;
       }
 
-	
+
 	.mobile-help-tooltip {
 	  position: fixed;
 	  z-index: 999999;
@@ -72,7 +72,7 @@
 	  }
 	}
 
-	/* Mobile Layout: under 840px */
+
 	@media (max-width: 839px) {
 	  body {
 		padding: 6px;
@@ -87,6 +87,12 @@
 	  .site-header h1 {
 		font-size: 14px;
 	  }
+
+
+      .viewer-link-btn {
+        padding: 6px 9px;
+        font-size: 10px;
+      }
 
 	  .controls {
 		padding: 7px;
@@ -167,7 +173,7 @@
 		gap: 3px;
 	  }
 
-	  /* Section headers: Choose Mode, Global Filters, View Settings, etc. */
+
 	  .controls-grid summary label,
 	  .controls-grid > .section-group > .control-item > label {
 		font-size: 11px !important;
@@ -175,7 +181,7 @@
 		margin-bottom: 2px;
 	  }
 
-	  /* Small labels: Focus, Minimum Population, Map Level, etc. */
+
 	  .controls-grid .sub-label {
 		font-size: 10px !important;
 		line-height: 1.1;
@@ -209,7 +215,7 @@
 		width: 48px;
 	  }
 
-	  /* Fix the weird tall Minimum Population / Minimum Score boxes */
+
 	  #minPop,
 	  #minScore {
 		height: 22px !important;
@@ -221,17 +227,17 @@
 		align-self: flex-start;
 	  }
 
-	  /* Add room for one more digit */
+
 	  #minPop {
 		width: 70px !important;
 	  }
 
-	  /* Keep Minimum Score narrower */
+
 	  #minScore {
 		width: 42px !important;
 	  }
 
-	  /* Make placeholder/example text fit on small screens */
+
 	  #minPop::placeholder,
 	  #minScore::placeholder {
 		font-size: 7px;
@@ -305,7 +311,7 @@
 		white-space: normal;
 		line-height: 1.15;
 	  }
-	  
+
 	  #map-container .gtitle,
 	  #chart-container .gtitle {
 		font-size: 10px !important;
@@ -341,7 +347,7 @@
 	  }
 
 	}
-	
+
 	@media (max-width: 839px) {
 	  .bottom-info-section {
 		padding: 14px !important;
@@ -561,7 +567,7 @@
 		  }
 		}
 
-      /* Compact Desktop Layout: 1000px through 1384px */
+
 		@media (min-width: 965px) and (max-width: 1409px) {
 		  body {
 			padding: 12px;
@@ -619,7 +625,7 @@
 			min-width: 0;
 		  }
 
-		  /* Section titles: Global Filters, View Settings, Accessibility, Name & Export, Choose Mode */
+
 		  .controls-grid summary label,
 		  .controls-grid > .section-group > .control-item > label {
 			font-size: 0.82rem;
@@ -627,7 +633,7 @@
 			margin-bottom: 1px;
 		  }
 
-		  /* Control labels: Focus, Minimum Population, Minimum Score, Map Level, etc. */
+
 		  .controls-grid .sub-label {
 			font-size: 0.72rem;
 			line-height: 1.05;
@@ -723,7 +729,7 @@
 		  }
 		}
 
-      /* Wide Layout: 1385px+ */
+
       @media (min-width: 1410px) {
         .controls-grid {
           display: flex;
@@ -760,7 +766,7 @@
           padding-left: 15px;
         }
 
-   
+
         .sec-export {
           flex: 0 0 auto;
           border-left: 3px solid #e0e0e0;
@@ -775,7 +781,7 @@
         }
       }
 
-      /* Section headers act as labels; the main settings button handles hiding. */
+
       summary {
         list-style: none;
         outline: none;
@@ -787,7 +793,7 @@
         display: inline-block;
       }
 
-      /* Hide full settings sections, including headers. */
+
       .controls-grid.settings-hidden .sec-filters,
       .controls-grid.settings-hidden .sec-view,
       .controls-grid.settings-hidden .sec-export {
@@ -800,7 +806,7 @@
         gap: 5px;
       }
 
-      /* Keep export controls compact on wide screens. */
+
       .sec-export .control-item {
         align-items: flex-start;
       }
@@ -821,7 +827,7 @@
         display: block;
       }
 
-      /* Highlight recommended map options. */
+
       @keyframes pulse {
         0% {
           opacity: 1;
@@ -942,7 +948,7 @@
         width: 100%;
       }
 
-      /* Mobile-friendly chart/map sizing and scrolling. */
+
       #chart-container,
       #map-container {
         width: 100%;
@@ -987,7 +993,7 @@
 		padding: 4px;
 	  }
 	}
-	
+
 	@media (min-width: 600px) and (max-width: 839px) {
 	  #map-container {
 		height: clamp(365px, 56vw, 465px);
@@ -1017,6 +1023,32 @@
         font-weight: 700;
       }
 
+      .viewer-link-btn {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 9px 15px;
+        border-radius: 999px;
+        background: #0d6efd;
+        color: #ffffff;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 700;
+        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.18);
+        transition:
+          background-color 0.2s ease,
+          transform 0.2s ease,
+          box-shadow 0.2s ease;
+        white-space: nowrap;
+      }
+
+      .viewer-link-btn:hover {
+        background: #0b5ed7;
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px rgba(13, 110, 253, 0.24);
+      }
+
       #list-view-container {
         width: 100%;
         background: #e0f0ff;
@@ -1032,7 +1064,7 @@
 		  gap: 20px;
 		}
 
-      /* ===== LIST CARDS – ENHANCED ===== */
+
       .list-card {
         background: #cce0ff;
         padding: 0;
@@ -1190,7 +1222,7 @@
         display: inline-block;
       }
 
-      /* Custom scrollbar */
+
       .ranking-table::-webkit-scrollbar {
         width: 6px;
       }
@@ -1247,7 +1279,7 @@
         }      }
 
 
-      /* ===== Bottom information section polish for v1.9.16 ===== */
+
       .bottom-info-section {
         padding: 26px !important;
         background-color: #cce0ff !important;
@@ -1543,6 +1575,7 @@
     <div class="site-header">
       <span style="font-size: 1.8rem"></span>
       <h1>The Bike Friendliness Index</h1>
+      <a class="viewer-link-btn" href="https://bikefriendlinessindex.org/viewer/">Go to viewer</a>
     </div>
 
     <p class="narrow-screen-note">
@@ -1776,7 +1809,7 @@
                 <div class="checkbox-wrapper" title="">
                   <input type="checkbox" id="forceCircle" />
                   <span class="sub-label">Make All Points Circles</span>
-				  
+
                 </div>
               </div>
             </div>
@@ -1822,25 +1855,25 @@
     </div>
 
     <script>
-      // --- CUSTOM COLOR SCALE (Red -> Orange -> Yellow -> Green) ---
-      // Domain 0.0-1.0 maps to score 0-100 roughly.
-      // 0-25: Red, 25-50: Orange, 50-80: Light Green, 80+: Dark Green
+
+
+
       const CUSTOM_COLORSCALE = [
-        [0.0, "#8b0000"], // Dark Red
-        [0.2, "#d73027"], // Red
-        [0.35, "#c97d32"], // Orange
-        [0.5, "#ccba47"], // Yellow
-        [0.65, "#d9ef8b"], // Light Greenish
-        [0.875, "#91cf60"], // Green
-        [1.0, "#1a9850"], // Dark Green
+        [0.0, "#8b0000"],
+        [0.2, "#d73027"],
+        [0.35, "#c97d32"],
+        [0.5, "#ccba47"],
+        [0.65, "#d9ef8b"],
+        [0.875, "#91cf60"],
+        [1.0, "#1a9850"],
       ];
 
-      // --- GLOBAL STATE ---
+
       let rawData = [];
       let currentMapScale = 1;
       let currentFocus = "Balanced";
       let currentLabelMode = "None";
-      let currentView = "map"; // Starts on map
+      let currentView = "map";
       let userEditedMapTitle = false;
       let customMapTitle = "";
       let userEditedGraphTitle = false;
@@ -1856,7 +1889,7 @@
       document
         .getElementById("csvFile")
         .addEventListener("change", handleFileUpload);
-      // Uses Plotly.relayout to instantly update the text on the screen without freezing the app.
+
       document.getElementById("graphTitle").addEventListener("input", (e) => {
 		  const newText = e.target.value;
 
@@ -1878,7 +1911,7 @@
         .addEventListener("change", updateView);
 
       document.addEventListener("keydown", function (event) {
-        // event.code works regardless of uppercase/lowercase/Shift.
+
         if (event.altKey && event.code === "KeyU") {
           event.preventDefault();
           document.getElementById("csvFile").click();
@@ -1888,8 +1921,8 @@
           event.preventDefault();
           statAdvancedSortUnlocked = !statAdvancedSortUnlocked;
 
-          // When unlocking, keep the visible stat list in the same "best" order
-          // until the internal Top/Bottom button is actually clicked.
+
+
           if (statAdvancedSortUnlocked) {
             statReverse = isLowerBetterStat(currentIndivStat);
           }
@@ -1898,7 +1931,7 @@
         }
       });
 
-      // PapaParse has a built-in 'download: true' flag that handles the fetch API for you.
+
       function loadDefaultData() {
         Papa.parse("data_for_web.csv", {
           download: true,
@@ -1906,10 +1939,10 @@
           skipEmptyLines: true,
           complete: function (results) {
             rawData = results.data;
-            updateView(); // Automatically builds the map and lists
+            updateView();
           },
           error: function (err) {
-            // Fails silently for the user, but tells you in the F12 console if the file is missing
+
             console.warn(
               "Default web data not found. Awaiting manual upload.",
               err,
@@ -1918,7 +1951,7 @@
         });
       }
 
-      // Settings no longer auto-minimize; one full-section hide/show button works at every screen size.
+
       window.addEventListener("DOMContentLoaded", () => {
         loadDefaultData();
         lockSettingsSectionsOpen();
@@ -1933,7 +1966,7 @@
 		window.addEventListener("resize", () => {
 		  const newWidth = window.innerWidth;
 
-		  // Ignore mobile address-bar height changes.
+
 		  if (Math.abs(newWidth - lastWindowWidth) < 20) return;
 
 		  lastWindowWidth = newWidth;
@@ -1948,7 +1981,7 @@
 			const crossedPhoneBreakpoint = nowPhoneMode !== lastPhoneMode;
 			lastPhoneMode = nowPhoneMode;
 
-			// Only fully redraw if your mobile/desktop Plotly layout rules changed.
+
 			if (crossedPhoneBreakpoint) {
 			  updateView();
 			  return;
@@ -1966,8 +1999,8 @@
 			}
 		  }, 150);
 		});
-		
-		
+
+
 		function setupMobileTitleTooltips() {
 		  const titledElements = document.querySelectorAll("[title]");
 
@@ -1981,7 +2014,7 @@
 			  el.setAttribute("aria-label", titleText);
 			}
 
-			// Important: remove native title so mobile browsers do not fight you.
+
 			if (isMobileLike()) {
 			  el.removeAttribute("title");
 			}
@@ -2148,12 +2181,12 @@
           document.querySelector(".sec-export"),
         ].filter(Boolean);
       }
-		
-		
+
+
 		function safeRelayout(plotId, update) {
 		  const plotDiv = document.getElementById(plotId);
 
-		  // If Plotly has not created the plot yet, skip instead of crashing.
+
 		  if (!plotDiv || !plotDiv.data || !plotDiv.layout) return;
 
 		  Plotly.relayout(plotDiv, update).catch((err) => {
@@ -2268,7 +2301,7 @@
         const listC = document.getElementById("list-view-container");
         const tryThese = document.getElementById("tryTheseText");
 
-        // First, hide everything by adding the hidden class
+
         graphOpts.classList.add("hidden");
         mapControl.classList.add("hidden");
         aggControl.classList.add("hidden");
@@ -2278,9 +2311,9 @@
         mapC.classList.add("hidden");
         listC.classList.add("hidden");
 
-        // Now show the correct combination based on currentView
+
         if (currentView === "map") {
-          // Switching from map to graph
+
           currentView = "graph";
           btn.textContent = "Switch to List View";
           if (tryThese) tryThese.style.display = "none";
@@ -2288,20 +2321,20 @@
           graphOpts.classList.remove("hidden");
           chartC.classList.remove("hidden");
           titleSection.classList.remove("hidden");
-          // map and list remain hidden
+
           if (accessSection) accessSection.classList.remove("hidden");
         } else if (currentView === "graph") {
-          // Switching from graph to list
+
           currentView = "list";
           btn.textContent = "Switch to Map View";
           if (tryThese) tryThese.style.display = "none";
 
           listC.classList.remove("hidden");
           aggControl.classList.remove("hidden");
-          // graph, map, options remain hidden
+
         } else {
-          // currentView === 'list'
-          // Switching from list to map
+
+
           currentView = "map";
           btn.textContent = "Switch to Graph View";
           if (tryThese) tryThese.style.display = "inline";
@@ -2310,7 +2343,7 @@
           mapControl.classList.remove("hidden");
           aggControl.classList.remove("hidden");
           titleSection.classList.remove("hidden");
-          // graph, list remain hidden
+
           if (accessSection) accessSection.classList.remove("hidden");
         }
 
@@ -2376,7 +2409,7 @@
             paper_bgcolor: "rgba(0,0,0,0)",
           };
 
-          // Hide the colorblind Plotly button during export.
+
           if (chartDiv.layout?.updatemenus?.length) {
             relayoutUpdate["updatemenus[0].visible"] = false;
             relayoutRevert["updatemenus[0].visible"] = true;
@@ -2409,7 +2442,7 @@
             paper_bgcolor: "rgba(0,0,0,0)",
           };
 
-          // Hide the colorblind Plotly button during export.
+
           if (mapDiv.layout?.updatemenus?.length) {
             relayoutUpdate["updatemenus[0].visible"] = false;
             relayoutRevert["updatemenus[0].visible"] = true;
@@ -2421,7 +2454,7 @@
               "#ffffff";
 
             relayoutRevert[`annotations[${watermarkIndex}].font.size`] = 12;
-            // Reverts it back to the site blue
+
             relayoutRevert[`annotations[${watermarkIndex}].bgcolor`] =
               "#cce0ff";
           }
@@ -2603,11 +2636,11 @@
 			STAT_HELP_LAST_LINES[statName];
 
 		  return (
-			"View some of the backend information collected for the most bike friendly cities: " + 
+			"View some of the backend information collected for the most bike friendly cities: " +
 			lastLine
 		  );
 		}
-		
+
 		function makeInfoButton(helpText) {
 		  const helpAttr = escapeHtmlAttr(helpText);
 		  return `<button type="button" class="stat-info-btn" title="${helpAttr}" data-mobile-help="${helpAttr}" aria-label="${helpAttr}">ⓘ</button>`;
@@ -2636,7 +2669,7 @@
           .replace(/>/g, "&gt;");
       }
 
-      // --- DATA HELPERS ---
+
       function formatLocation(name) {
         if (!name) return "Unknown";
         const upper = name.trim().toUpperCase();
@@ -2786,10 +2819,10 @@
         const cleanCity = cleanCityName(city).toLowerCase();
         const upperState = (currentState || "").trim().toUpperCase();
 
-        // 1. NORTH AMERICAN SHIELD
-        // We check this first. If the city is in the US or Canada (based on the CSV state column),
-        // we return the state as-is. This prevents "London, ON" or "Paris, TX" from being
-        // caught by the European hardcodes below.
+
+
+
+
         const naStates = [
           "AL",
           "AK",
@@ -2861,9 +2894,9 @@
           return currentState;
         }
 
-        // 2. REGIONAL MAPPING DICTIONARY
+
         const CITY_TO_REGION = {
-          // --- GERMANY (16 States) ---
+
           berlin: "Berlin",
           hamburg: "Hamburg",
           munich: "Bayern",
@@ -2901,8 +2934,8 @@
 		saarbrucken: "Saarland",
 		saarbrücken: "Saarland",
 		wiesbaden: "Hessen",
-		
-          // --- FRANCE (13 Regions) ---
+
+
           paris: "Île-de-France",
           lyon: "Auvergne-Rhône-Alpes",
           grenoble: "Auvergne-Rhône-Alpes",
@@ -2927,7 +2960,7 @@
 		"fort-de-france": "Martinique",
 		mamoudzou: "Mayotte",
 
-          // --- ITALY (20 Regions) ---
+
           rome: "Lazio",
           milan: "Lombardia",
           florence: "Toscana",
@@ -2956,8 +2989,8 @@
 		termoli: "Molise",
 		perugia: "Umbria",
 		arezzo: "Toscana",
-		
-          // --- BRAZIL (26 States + DF) ---
+
+
           "sao paulo": "SP",
           sorocaba: "SP",
           campinas: "SP",
@@ -2992,8 +3025,8 @@
 		uberlandia: "Minas Gerais",
 		londrina: "Paraná",
 		florianopolis: "Santa Catarina",
-		
-          // --- MEXICO (31 States + CDMX) ---
+
+
           "mexico city": "Distrito Federal",
           guadalajara: "Jalisco",
           zapopan: "Jalisco",
@@ -3039,7 +3072,7 @@
 		guadalupe: "Zacatecas",
 		zacatecas: "Zacatecas",
 
-          // --- CHINA (Provinces/Municipalities/SARs) ---
+
           beijing: "北京市",
           "chaoyang district (beijing)": "北京市",
           shanghai: "上海市",
@@ -3109,7 +3142,7 @@
 		fuzhou: "福建省",
 		nantong: "江苏省",
 
-          // --- UNITED KINGDOM (12 Regions for EER13NM Sync) ---
+
           london: "London",
           "city of london": "London",
           hackney: "London",
@@ -3146,12 +3179,12 @@
         return CITY_TO_REGION[cleanCity] || currentState;
       }
 
-      // to readable names strictly for frontend display (List, Graph, and Map hovers).
+
       function getDisplayName(code) {
         if (!code) return code;
 
         const DISPLAY_MAP = {
-          // Brazil
+
           AC: "Acre",
           AL: "Alagoas",
           AP: "Amapá",
@@ -3162,8 +3195,8 @@
           ES: "Espírito Santo",
           GO: "Goiás",
           MA: "Maranhão",
-          //MT: "Mato Grosso",
-          //MS: "Mato Grosso do Sul",
+
+
           MG: "Minas Gerais",
           PA: "Pará",
           PB: "Paraíba",
@@ -3182,7 +3215,7 @@
 		"Mato Grosso": "Mato Grosso",
 		"Mato Grosso do Sul": "Mato Grosso do Sul",
 
-          // China
+
           北京市: "Beijing",
           上海市: "Shanghai",
           江苏省: "Jiangsu",
@@ -3217,7 +3250,7 @@
 			重庆市: "Chongqing",
 			天津市: "Tianjin",
 
-          // OPTIONAL: US States (Translates the CSV abbreviations into full names for the UI)
+
           AL: "Alabama",
           AK: "Alaska",
           AZ: "Arizona",
@@ -3278,20 +3311,20 @@
         const displayName = getDisplayName(stateCode);
         const countryName = getCountryName(stateCode);
 
-        // If it's the US, just return the state (e.g., "Ohio")
+
         if (countryName === "United States") {
           return displayName;
         }
 
-        // If the region name is already the country name (e.g., "Germany"), prevent "Germany, Germany"
+
         if (displayName === countryName) {
           return displayName;
         }
 
-        // Otherwise, return "Region, Country" (e.g., "Sachsen, Germany")
+
         return displayName + ", " + countryName;
       }
-		
+
 		function cleanCityName(name) {
 		  return (name || "").replace(/\*/g, "").trim();
 		}
@@ -3382,7 +3415,7 @@
           "AUS",
         ];
 
-        // Ambiguous Brazilian state abbreviations that collide with US/Canadian codes use full names.
+
         const brazil = [
           "AC",
           "AP",
@@ -3392,8 +3425,8 @@
           "DF",
           "ES",
           "GO",
-          //"MT",
-          //"MS",
+
+
           "MG",
           "PB",
           "PR",
@@ -3619,7 +3652,7 @@
           document.getElementById("sizeSlider").value,
         );
         const scaleFactor = sliderVal / 100.0;
-        const aggMode = document.getElementById("aggFilter").value; // Need to know which score to test
+        const aggMode = document.getElementById("aggFilter").value;
 
         let filtered = [];
         rawData.forEach((row) => {
@@ -3745,7 +3778,7 @@
         const popMap = {};
         const cwDataMap = {};
 
-        // 1. CREATE A STRICT KEY USING THE FOCUS
+
         rawData
           .filter(
             (r) =>
@@ -3757,11 +3790,11 @@
             const baseCityKey =
               r["City/municipality"] + "|" + r["State/ Country"];
 
-            // Lock the key to BOTH the city and the specific focus (Balanced, Infra, Dest)
+
             const strictKey = baseCityKey + "|" + focus;
 
             if (!isNaN(p)) popMap[baseCityKey] = p;
-            cwDataMap[strictKey] = r; // Store it using the strict key
+            cwDataMap[strictKey] = r;
           });
 
         let filtered = [];
@@ -3816,7 +3849,7 @@
           const baseCityKey = city + "|" + row["State/ Country"];
           const focus = (row["Focus"] || "").trim().toLowerCase();
 
-          // 2. LOOK IT UP USING THAT SAME STRICT KEY
+
           const strictKey = baseCityKey + "|" + focus;
 
           let pop = cleanNum(row["Population"], false);
@@ -3838,25 +3871,25 @@
 
           if (regionFilter !== "All" && region !== regionFilter) return;
 
-          // when processing a 'Best Area' row, ensuring metrics match across the UI.
+
           let avgScore, disparity, bestAreaScore;
-          const safeRow = { ...row }; // Shallow copy so we don't mutate the raw data in memory
+          const safeRow = { ...row };
           const isCityWide =
             (row["Aggregation"] || "").trim().toLowerCase() === "city wide";
 
           if (!isCityWide && cwDataMap[strictKey]) {
             const cwRow = cwDataMap[strictKey];
-            // Pull the true City Wide average from the parent row
+
             avgScore = cleanNum(cwRow["Average Score"], false) || 0;
             disparity = cleanNum(cwRow["Disparity"], false) || 0;
 
-            // The Best Area score is physically in the current row's 'Average Score' cell
+
             bestAreaScore =
               cleanNum(row["Average Score"], false) || avgScore + disparity;
 
-            // Inject the correct highest point from the parent row so createCard reads it correctly
+
             safeRow["Highest Point"] = cwRow["Highest Point"];
-            // SYNC FOCUS DISPARITY SO THE TOOLTIP TEXT STAYS IDENTICAL
+
             safeRow["Focus Disparity"] = cwRow["Focus Disparity"];
           } else {
             avgScore = cleanNum(row["Average Score"], false) || 0;
@@ -3894,8 +3927,8 @@
         });
         return processed;
       }
-		
-		
+
+
 		function isPhoneWidth() {
 		  return window.innerWidth <= 600;
 		}
@@ -3907,14 +3940,14 @@
 			  ? { l: 0, r: 58, t: 28, b: 4 }
 			  : { l: 0, r: 75, t: 50, b: 20 };
 		}
-		
+
 		function getMapColorbar(titleText) {
 		  if (isPhoneWidth()) {
 			return {
 			  title: { text: "" },
 
-			  // Put the bar just outside the plotting area,
-			  // then reserve space for it with margin.r above.
+
+
 			  x: 1.015,
 			  xanchor: "left",
 
@@ -3983,7 +4016,7 @@
         const data = targetData;
         document.getElementById("cityCountDisplay").textContent =
           `${data.length} Cities`;
-        
+
 		const isPhone = window.innerWidth <= 600;
 
 		const plotConfig = {
@@ -4227,7 +4260,7 @@
                 "CHINA",
               ].includes(cleanCountry)
             ) {
-              // Sub-regions captured in state aggregations
+
             } else {
               if (!worldAgg[country] || score > worldAgg[country].score) {
                 worldAgg[country] = aggObj;
@@ -4308,7 +4341,7 @@
              traces.push({
 				type: "choropleth",
 
-				// Changed from Plotly's built-in USA-states mode to your own fixed GeoJSON.
+
 				locationmode: "geojson-id",
 				geojson: "https://raw.githubusercontent.com/Tommyblockhead20/bike-friendliness-index/refs/heads/main/boundaries/US_States_3.geojson",
 				featureidkey: "properties.postal",
@@ -4727,18 +4760,18 @@
 		  let applyingMapLock = false;
 
 		  function getMaxAllowedLat(scale) {
-			if (scale <= 1.25) return 55; // world view: keep it tidy
+			if (scale <= 1.25) return 55;
 			if (scale <= 2) return 65;
 			if (scale <= 4) return 75;
-			return 82; // zoomed in: allow Nordics, Canada, Patagonia, etc.
+			return 82;
 		  }
 
 		  mapDiv.on("plotly_relayout", function (eventData) {
 			if (applyingMapLock) return;
 
 			clearTimeout(lockTimeout);
-			
-			
+
+
 			const lockDelay = window.innerWidth <= 600 ? 500 : 250;
 
 			lockTimeout = setTimeout(() => {
@@ -4793,8 +4826,8 @@
 
 		  mapDiv._hasRelayoutListener = true;
 		}
-		
-		
+
+
 		function getGraphLabelText(d, allData) {
 		  const cityName = d.city.trim().toLowerCase();
 
@@ -4847,7 +4880,7 @@
 		  const xUnitsPerPixel = xSpan / plotWidth;
 		  const yUnitsPerPixel = ySpan / plotHeight;
 
-		  // Approximate text size in pixels, then convert to graph/data units.
+
 		  const textWidthPx = Math.max(36, text.length * 6.4);
 		  const textHeightPx = 18;
 
@@ -4873,15 +4906,15 @@
 			a.bottom > b.top
 		  );
 		}
-		
+
 		function graphLabelBoxFitsInRange(box, visibleRange) {
 		  if (!visibleRange) return true;
 
 		  const xSpan = visibleRange.xMax - visibleRange.xMin;
 		  const ySpan = visibleRange.yMax - visibleRange.yMin;
 
-		  // Small padding keeps labels away from the plot edge,
-		  // but scales with zoom so it doesn't nuke labels when zoomed in.
+
+
 		  const xPad = xSpan * 0.015;
 		  const yPad = ySpan * 0.025;
 
@@ -4948,9 +4981,9 @@
 			  const overlapsExistingLabel = placedBoxes.some((existingBox) =>
 				graphLabelBoxesOverlap(box, existingBox),
 			  );
-				
+
 				const fitsInsideGraph = graphLabelBoxFitsInRange(box, visibleRange);
-				
+
 			  if (!overlapsExistingLabel) {
 				chosenPosition = position;
 				chosenBox = box;
@@ -4958,7 +4991,7 @@
 			  }
 			}
 
-			// Skip the label if every candidate position would overlap.
+
 			if (!chosenPosition) return;
 
 			placedBoxes.push(chosenBox);
@@ -4994,8 +5027,8 @@
 
 		  return annotations;
 		}
-		
-		
+
+
 		let graphLabelRelayoutInProgress = false;
 
 		function attachGraphRelayoutLabelUpdater(allData) {
@@ -5036,12 +5069,12 @@
 			  });
 		  });
 		}
-		
+
 		function getColorblindButtonLabel() {
 		  const isOn = document.getElementById("colorblindMode")?.checked;
 
-		  // Plotly updatemenu multiline labels are left-biased.
-		  // The nbsp padding is the simple, non-cursed way to visually center "Mode".
+
+
 		  const modePadding = isOn
 			? "&nbsp;&nbsp;&nbsp;&nbsp;"
 			: "&nbsp;&nbsp;&nbsp;";
@@ -5096,7 +5129,7 @@
 		  const plotDiv = document.getElementById(plotId);
 		  if (!plotDiv || !plotDiv.on) return;
 
-		  // Prevent duplicate click listeners every redraw.
+
 		  if (plotDiv.dataset.colorblindButtonAttached === "true") return;
 		  plotDiv.dataset.colorblindButtonAttached = "true";
 
@@ -5110,12 +5143,12 @@
 			updateView();
 		  });
 		}
-		
+
 		function attachGraphColorblindButton() {
 		  const chartDiv = document.getElementById("chart-container");
 		  if (!chartDiv || !chartDiv.on) return;
 
-		  // Prevent stacking duplicate listeners every time updateView() redraws.
+
 		  if (chartDiv.dataset.colorblindButtonAttached === "true") return;
 		  chartDiv.dataset.colorblindButtonAttached = "true";
 
@@ -5151,7 +5184,7 @@
 			borderpad: 5,
 		  };
 		}
-		
+
 		function getCurrentGraphVisibleRange() {
 		  const chartDiv = document.getElementById("chart-container");
 
@@ -5183,7 +5216,7 @@
 		}
 
 
-      // --- GRAPH & LIST UPDATE FUNCTIONS ---
+
       function updatePlot() {
         let allData = processDataForGraph();
         document.getElementById("cityCountDisplay").textContent =
@@ -5211,12 +5244,12 @@
           ? customGraphTitle
           : defaultTitle;
 
-        // Sync the input box so it displays the correct graph title when you switch modes
+
         if (currentView === "graph") {
           document.getElementById("graphTitle").value = displayTitle;
         }
 
-        
+
 
         const traces = [];
         const regions = ["North America", "Europe", "Other"];
@@ -5295,7 +5328,7 @@
             hovertext: regionData.map((d) => d.city),
           });
         });
-        
+
 		const visibleRange = getCurrentGraphVisibleRange();
 		const annotations = buildGraphLabelAnnotations(allData, visibleRange);
 		annotations.push(getGraphWatermarkAnnotation());
@@ -5374,15 +5407,15 @@
               !(typeof val === "number" && isNaN(val))
             );
           });
-		
+
 			if (config.type === "pfb" || config.type === "copenhagen") {
 			  displayData = displayData.filter((d) => {
 				const val = parseStatNumber(getCardValue(d));
 				if (Number.isNaN(val) || val === 0) return false;
 
-				// In your current setup:
-				// reverse === true means Overrated
-				// reverse === false means Underrated
+
+
+
 				return config.reverse ? val < 0 : val > 0;
 			  });
 			}
