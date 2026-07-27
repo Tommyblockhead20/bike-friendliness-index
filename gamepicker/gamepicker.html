@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Last Game Standing</title>
+<title>Game Picker</title>
 <style>
 :root{
   --bg0:#070b16;--bg1:#0f172a;--panel:rgba(18,29,50,.90);--panel2:rgba(28,43,70,.94);
@@ -14,7 +14,7 @@
 *{box-sizing:border-box} body{margin:0;min-height:100vh;font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(circle at 8% -8%,rgba(167,139,250,.3),transparent 31rem),radial-gradient(circle at 88% 0%,rgba(56,189,248,.2),transparent 29rem),linear-gradient(180deg,var(--bg1),var(--bg0))}
 body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent 75%)}
 button,input,select{font:inherit} button{cursor:pointer} a{color:inherit}.hide{display:none!important}
-header{max-width:1380px;margin:auto;padding:30px 18px 18px}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:rgba(12,20,37,.6);color:var(--muted);font-size:.82rem}.eyebrow b{color:var(--good)}
+header{max-width:1380px;margin:auto;padding:30px 18px 18px}.header-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,380px);gap:18px;align-items:start}.header-title{padding-top:4px}.header-join{padding:14px 16px}.header-join h2{margin:0 0 8px}.header-join label{margin-top:0}.header-join-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}.header-join-row .btn{width:auto;margin:0;min-height:42px}@media(max-width:760px){.header-layout{grid-template-columns:1fr}.header-join-row{grid-template-columns:1fr}.header-join-row .btn{width:100%}}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:rgba(12,20,37,.6);color:var(--muted);font-size:.82rem}.eyebrow b{color:var(--good)}
 h1{margin:10px 0 8px;font-size:clamp(2.1rem,5vw,4rem);line-height:.96;letter-spacing:-.055em}.subtitle{max-width:920px;color:var(--muted);line-height:1.5}
 .mode-tabs{max-width:1380px;margin:0 auto 16px;padding:0 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.mode-tabs button{border:1px solid var(--line);border-radius:16px;padding:13px;background:rgba(7,13,25,.72);color:var(--muted);font-weight:900}.mode-tabs button.active{color:white;border-color:rgba(167,139,250,.8);background:linear-gradient(135deg,rgba(124,58,237,.8),rgba(37,99,235,.68));box-shadow:0 12px 30px rgba(79,70,229,.2)}
 main{max-width:1380px;margin:0 auto 56px;padding:0 18px;display:grid;grid-template-columns:370px minmax(0,1fr);gap:18px;align-items:start}@media(max-width:980px){main{grid-template-columns:1fr}.sidebar{position:static!important}}
@@ -70,13 +70,26 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
 <body>
 <header>
-  <h1>Last Game Standing</h1>
-  <div class="subtitle">Rank the best choices, then narrow them down together with public or private vetoes.</div>
+  <div class="header-layout">
+    <div class="header-title">
+      <h1>Game Picker</h1>
+    </div>
+    <section id="joinOnlineSection" class="card header-join" aria-label="Join an online room">
+      <h2>Join an online room</h2>
+      <div class="header-join-row">
+        <div>
+          <label for="joinRoomPassword">Room password</label>
+          <input id="joinRoomPassword" class="field password-field" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="1–8 digits">
+        </div>
+        <button id="joinRoomButton" class="btn secondary" type="button">Join</button>
+      </div>
+    </section>
+  </div>
 </header>
 
 <div class="mode-tabs">
   <button id="basicModeBtn" class="active" type="button">Basic Picker</button>
-  <button id="vetoModeBtn" type="button">Veto Game Picker</button>
+  <button id="vetoModeBtn" type="button">Last Game Standing (Veto Picker)</button>
 </div>
 
 <main id="setupMain">
@@ -91,7 +104,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
         <button id="settingInPerson" class="toggle-button active" type="button" aria-pressed="true">In person</button>
         <button id="settingOnline" class="toggle-button" type="button" aria-pressed="false">Online</button>
       </div>
-      <div class="help">The current catalog contains board games. Video-game entries can use the same filters when you add them later.</div>
 
       <div class="section-title">Group size</div>
       <label for="playerCount">Player count <span id="playerCountValue" class="value">4</span></label>
@@ -99,7 +111,14 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
         <input id="playerCount" type="range" min="1" max="14" step="1" value="4">
       </div>
       <div class="slider-labels" aria-hidden="true">
-        <span style="--pos:0">1</span><span style="--pos:.230769">4</span><span style="--pos:.461538">7</span><span style="--pos:.692308">10</span><span style="--pos:1">14+</span>
+        <span style="--pos:0">1</span>
+        <span style="--pos:.076923">2</span>
+        <span style="--pos:.230769">4</span>
+        <span style="--pos:.384615">6</span>
+        <span style="--pos:.538462">8</span>
+        <span style="--pos:.692308">10</span>
+        <span style="--pos:.846154">12</span>
+        <span style="--pos:1">14+</span>
       </div>
       <div id="playerQuickPicks" class="quick-picks"></div>
 
@@ -139,10 +158,10 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       <div class="toggle-grid">
         <button id="tryNewGamesToggle" class="toggle-button active" type="button" aria-pressed="true">Include new/unrated games</button>
         <button id="includeCampaignsToggle" class="toggle-button active" type="button" aria-pressed="true">Include campaign games</button>
-        <button id="includeExpansionsToggle" class="toggle-button" type="button" aria-pressed="false">Include expansion-only rows</button>
         <button id="thomasPlayingToggle" class="toggle-button active" type="button" aria-pressed="true">Thomas is playing</button>
         <button id="alexisPlayingToggle" class="toggle-button active" type="button" aria-pressed="true">Alexis is playing</button>
       </div>
+      <button id="mergeCompatibleToggle" class="toggle-button active full-toggle" type="button" aria-pressed="true">Merge compatible games</button>
 
       <label for="search">Search title</label>
       <input id="search" class="field" placeholder="Root, PARKS, Werewords…">
@@ -187,7 +206,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
         <option value="random">Randomize every round</option>
         <option value="snake">Snake order</option>
       </select>
-      <div class="tiny" style="margin-top:7px">Public defaults to fixed order; private defaults to randomized each round.</div>
 
       <label class="single-device-check">
         <input id="singleDeviceMode" type="checkbox">
@@ -198,7 +216,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
         <div id="firebaseStatus" class="help firebase-status warn">Connecting to Firebase…</div>
         <label for="onlinePassword">Choose room password</label>
         <input id="onlinePassword" class="field password-field" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="1–8 digits">
-        <div class="tiny" style="margin-top:7px">Other players use this password or the shareable room link.</div>
       </div>
 
       <div id="singleDeviceHelp" class="help hide">This creates local seat buttons for every vetoer. Tap a person’s button when it is their turn.</div>
@@ -206,12 +223,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       <div id="candidateFormula" class="formula" style="margin-top:12px"></div>
       <button id="createRoomButton" class="btn primary" type="button">Create online room</button>
 
-      <div id="joinOnlineSection">
-        <div class="section-title">Join an online room</div>
-        <label for="joinRoomPassword">Room password</label>
-        <input id="joinRoomPassword" class="field password-field" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="1–8 digits">
-        <button id="joinRoomButton" class="btn secondary" type="button">Join online room</button>
-      </div>
     </section>
   </aside>
 
@@ -298,6 +309,7 @@ function isFirebaseConfigured() {
 }
 
 const games = window.GAME_CATALOG || [];
+const splitGameComponents = {"bgg:156129":[{"id":"bgg:156129","title":"Deception: Murder in Hong Kong","displayTitle":"Deception: Murder in Hong Kong (2014)","year":2014,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":4,"maxPlayers":12,"recommendedPlayers":[5,6,7,8,9,10,11,12],"bestPlayers":[6,7,8],"minTime":20,"maxTime":20,"weight":1.5912,"ageMin":12,"geekRating":7.21474,"averageRating":7.41953,"popularity":38019,"rank":290,"thomasRating":7.5,"alexisRating":9,"tag":"Deduction","url":"https://boardgamegeek.com/boardgame/156129"},{"id":"bgg:227748","title":"Deception: Undercover Allies","displayTitle":"Deception: Undercover Allies (2017)","year":2017,"gameType":"board","inPerson":true,"online":true,"itemType":"expansion","campaign":false,"adultContent":false,"owned":true,"minPlayers":4,"maxPlayers":14,"recommendedPlayers":[5,6,7,8,9,10,11,12,13,14],"bestPlayers":[7,8,10],"minTime":20,"maxTime":20,"weight":1.7407,"ageMin":12,"geekRating":6.43989,"averageRating":7.96606,"popularity":6700,"rank":0,"thomasRating":null,"alexisRating":null,"tag":"Deduction","url":"https://boardgamegeek.com/boardgame/227748"}],"bgg:172225":[{"id":"bgg:172225","title":"Exploding Kittens","displayTitle":"Exploding Kittens (2015)","year":2015,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":5,"recommendedPlayers":[3,4,5],"bestPlayers":[4,5],"minTime":15,"maxTime":15,"weight":1.08,"ageMin":8,"geekRating":5.88654,"averageRating":6.06952,"popularity":93862,"rank":3998,"thomasRating":7.0,"alexisRating":null,"tag":"Card Game","url":"https://boardgamegeek.com/boardgame/172225"},{"id":"bgg:204053","title":"Exploding Kittens: Imploding Kittens","displayTitle":"Exploding Kittens: Imploding Kittens (2016)","year":2016,"gameType":"board","inPerson":true,"online":true,"itemType":"expansion","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":6,"recommendedPlayers":[3,4,5,6],"bestPlayers":[4,5],"minTime":15,"maxTime":15,"weight":1.1017,"ageMin":8,"geekRating":6.40681,"averageRating":6.97724,"popularity":22922,"rank":0,"thomasRating":7.0,"alexisRating":null,"tag":"Card Game","url":"https://boardgamegeek.com/boardgame/204053"}],"bgg:232414":[{"id":"bgg:232414","title":"Oceans","displayTitle":"Oceans (2020)","year":2020,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":4,"recommendedPlayers":[2,3,4],"bestPlayers":[3],"minTime":60,"maxTime":90,"weight":2.849,"ageMin":10,"geekRating":6.887,"averageRating":7.38829,"popularity":14046,"rank":638,"thomasRating":8.5,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/232414"},{"id":"bgg:324557","title":"Oceans: Legends of the Deep","displayTitle":"Oceans: Legends of the Deep (2023)","year":2023,"gameType":"board","inPerson":true,"online":true,"itemType":"expansion","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":4,"recommendedPlayers":[2,3,4],"bestPlayers":[3],"minTime":60,"maxTime":90,"weight":2.8,"ageMin":10,"geekRating":5.64324,"averageRating":7.90778,"popularity":1485,"rank":null,"thomasRating":null,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/324557"}],"bgg:147949":[{"id":"bgg:147949","title":"One Night Ultimate Werewolf","displayTitle":"One Night Ultimate Werewolf (2014)","year":2014,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":3,"maxPlayers":10,"recommendedPlayers":[4,5,6,7,8,9,10],"bestPlayers":[6,7,8],"minTime":10,"maxTime":10,"weight":1.3831,"ageMin":10,"geekRating":6.85433,"averageRating":7.03178,"popularity":59654,"rank":684,"thomasRating":8.25,"alexisRating":null,"tag":"Deduction","url":"https://boardgamegeek.com/boardgame/147949"},{"id":"bgg:163166","title":"One Night Ultimate Werewolf: Daybreak","displayTitle":"One Night Ultimate Werewolf: Daybreak (2015)","year":2015,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":3,"maxPlayers":10,"recommendedPlayers":[4,5,6,7,8,9],"bestPlayers":[6,7,8],"minTime":10,"maxTime":10,"weight":1.4065,"ageMin":8,"geekRating":6.76327,"averageRating":7.28093,"popularity":17237,"rank":812,"thomasRating":8.0,"alexisRating":null,"tag":"Deduction","url":"https://boardgamegeek.com/boardgame/163166"}],"bgg:266524":[{"id":"bgg:266524","title":"PARKS","displayTitle":"PARKS (2019)","year":2019,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":1,"maxPlayers":5,"recommendedPlayers":[1,2,3,4],"bestPlayers":[3],"minTime":30,"maxTime":60,"weight":2.1298,"ageMin":10,"geekRating":7.39403,"averageRating":7.61325,"popularity":53847,"rank":180,"thomasRating":8.0,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/266524"},{"id":"bgg:298729","title":"PARKS: Nightfall","displayTitle":"PARKS: Nightfall (2021)","year":2021,"gameType":"board","inPerson":true,"online":true,"itemType":"expansion","campaign":false,"adultContent":false,"owned":true,"minPlayers":1,"maxPlayers":5,"recommendedPlayers":[1,2,3,4],"bestPlayers":[3],"minTime":40,"maxTime":70,"weight":2.2381,"ageMin":10,"geekRating":7.18284,"averageRating":8.142,"popularity":19741,"rank":0,"thomasRating":8.0,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/298729"}],"bgg:217372":[{"id":"bgg:217372","title":"The Quest for El Dorado","displayTitle":"The Quest for El Dorado (2017)","year":2017,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":4,"recommendedPlayers":[2,3,4],"bestPlayers":[2,4],"minTime":30,"maxTime":60,"weight":1.9418,"ageMin":8,"geekRating":7.5378,"averageRating":7.71831,"popularity":54038,"rank":122,"thomasRating":8.25,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/217372"},{"id":"bgg:271615","title":"The Quest for El Dorado: The Golden Temples","displayTitle":"The Quest for El Dorado: The Golden Temples (2019)","year":2019,"gameType":"board","inPerson":true,"online":true,"itemType":"standalone","campaign":false,"adultContent":false,"owned":true,"minPlayers":2,"maxPlayers":4,"recommendedPlayers":[2,3,4],"bestPlayers":[2,4],"minTime":30,"maxTime":60,"weight":2.0476,"ageMin":8,"geekRating":6.51651,"averageRating":7.64257,"popularity":5992,"rank":1292,"thomasRating":null,"alexisRating":null,"tag":"Strategy","url":"https://boardgamegeek.com/boardgame/271615"}]};
 let appMode = 'basic';
 let finalistCount = 1;
 let roundCount = 1;
@@ -491,7 +503,7 @@ function getFilters() {
     weightChoice: $('weightChoice').value,
     includeNew: isActive('tryNewGamesToggle'),
     includeCampaigns: isActive('includeCampaignsToggle'),
-    includeExpansions: isActive('includeExpansionsToggle'),
+    mergeCompatible: isActive('mergeCompatibleToggle'),
     search: $('search').value.trim().toLowerCase(),
     thomas: isActive('thomasPlayingToggle'),
     alexis: isActive('alexisPlayingToggle')
@@ -504,7 +516,6 @@ function eligible(g, f, strictPreferences) {
   if (f.players != null && !(g.minPlayers <= f.players && f.players <= g.maxPlayers)) return false;
   if (f.age != null && g.ageMin != null && g.ageMin > f.age) return false;
   if (!f.includeCampaigns && g.campaign) return false;
-  if (!f.includeExpansions && g.itemType === 'expansion') return false;
   if (!f.includeNew && g.thomasRating == null && g.alexisRating == null) return false;
   if (f.search && !`${g.title} ${g.displayTitle} ${g.tag}`.toLowerCase().includes(f.search)) return false;
   if (strictPreferences && !lengthMatches(g, f.lengthChoice)) return false;
@@ -538,9 +549,17 @@ function scoreGame(g, f) {
   return clamp(score, 0, 100);
 }
 
+function catalogForFilters(f) {
+  if (f.mergeCompatible) return games;
+  return games.flatMap(game => {
+    const components = splitGameComponents[game.id];
+    return game.itemType === 'merged' && components?.length ? components : [game];
+  });
+}
+
 function rankedGames(strictPreferences = false) {
   const f = getFilters();
-  return games
+  return catalogForFilters(f)
     .filter(g => eligible(g, f, strictPreferences))
     .map(g => ({ ...g, _score: scoreGame(g, f) }))
     .sort((a, b) => b._score - a._score || (b.popularity || 0) - (a.popularity || 0));
@@ -582,6 +601,7 @@ function renderFilters() {
   if (f.weightChoice !== 'any') pills.push($('weightChoice').selectedOptions[0].textContent);
   if (!f.includeCampaigns) pills.push('no campaign games');
   if (!f.includeNew) pills.push('rated games only');
+  if (!f.mergeCompatible) pills.push('compatible games split');
 
   $('activeFilters').innerHTML = pills.length
     ? pills.map(value => `<span class="pill good">${esc(value)}</span>`).join('')
@@ -805,7 +825,6 @@ function showRoomScreen() {
 function updateRoomModeUI() {
   const single = $('singleDeviceMode').checked;
   $('onlineRoomControls').classList.toggle('hide', single);
-  $('joinOnlineSection').classList.toggle('hide', single);
   $('singleDeviceHelp').classList.toggle('hide', !single);
   $('createRoomButton').textContent = single ? 'Create single-device session' : 'Create online room';
 }
@@ -1348,7 +1367,7 @@ $('basicModeBtn').addEventListener('click', () => setMode('basic'));
 $('vetoModeBtn').addEventListener('click', () => setMode('veto'));
 
 ['typeBoard', 'typeVideo', 'settingInPerson', 'settingOnline', 'tryNewGamesToggle',
- 'includeCampaignsToggle', 'includeExpansionsToggle', 'thomasPlayingToggle',
+ 'includeCampaignsToggle', 'mergeCompatibleToggle', 'thomasPlayingToggle',
  'alexisPlayingToggle'].forEach(id => toggleButton(id));
 
 toggleButton('sameAsPlayersToggle', () => {
