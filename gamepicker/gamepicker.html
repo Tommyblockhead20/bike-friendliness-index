@@ -78,8 +78,8 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       <h2>Join an online room</h2>
       <div class="header-join-row">
         <div>
-          <label for="joinRoomPassword">Room password</label>
-          <input id="joinRoomPassword" class="field password-field" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="1–8 digits">
+          <label for="joinRoomPassword">Room code</label>
+          <input id="joinRoomPassword" class="field password-field" type="text" inputmode="text" pattern="[A-Za-z0-9]*" maxlength="8" autocapitalize="characters" spellcheck="false" autocomplete="off" placeholder="1–8 letters or numbers">
         </div>
         <button id="joinRoomButton" class="btn secondary" type="button">Join</button>
       </div>
@@ -214,8 +214,8 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
       <div id="onlineRoomControls">
         <div id="firebaseStatus" class="help firebase-status warn">Connecting to Firebase…</div>
-        <label for="onlinePassword">Choose room password</label>
-        <input id="onlinePassword" class="field password-field" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="1–8 digits">
+        <label for="onlinePassword">Choose room code</label>
+        <input id="onlinePassword" class="field password-field" type="text" inputmode="text" pattern="[A-Za-z0-9]*" maxlength="8" autocapitalize="characters" spellcheck="false" autocomplete="off" placeholder="1–8 letters or numbers">
       </div>
 
       <div id="singleDeviceHelp" class="help hide">This creates local seat buttons for every vetoer. Tap a person’s button when it is their turn.</div>
@@ -246,7 +246,7 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
   <section class="card results">
     <div class="room-top">
       <div class="room-identity">
-        <div id="roomTypeLabel" class="tiny">ONLINE ROOM PASSWORD</div>
+        <div id="roomTypeLabel" class="tiny">ONLINE ROOM CODE</div>
         <div id="roomCode" class="room-code"></div>
         <div id="roomStateSummary" class="summary"></div>
       </div>
@@ -409,7 +409,14 @@ function intersection(a, b) {
 }
 
 function sanitizePassword(value) {
-  return String(value ?? '').replace(/\D/g, '').slice(0, 8);
+  return String(value ?? '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+}
+
+function isValidRoomCode(value) {
+  return /^[A-Z0-9]{1,8}$/.test(value);
 }
 
 function childAgeValue(choice) {
@@ -898,45 +905,66 @@ function stopRoomListener() {
 
 async function claimSeat(code) {
   const playersRef = ref(db, `rooms/${code}/players`);
-  let full = false;
+  const snapshot = await get(playersRef);
+  if (!snapshot.exists()) return { ok: false, reason: 'not-found' };
 
-  const result = await runTransaction(playersRef, rawPlayers => {
-    const players = Array.isArray(rawPlayers) ? rawPlayers : Object.values(rawPlayers || {});
-    if (!players.length) return;
+  const rawPlayers = snapshot.val() || {};
+  const playerEntries = Array.isArray(rawPlayers)
+    ? rawPlayers.map((player, index) => [String(index), player]).filter(([, player]) => player)
+    : Object.entries(rawPlayers).filter(([, player]) => player);
 
-    if (players.some(player => player.uid === currentUid)) return players;
+  if (!playerEntries.length) return { ok: false, reason: 'not-found' };
+  if (playerEntries.some(([, player]) => player.uid === currentUid)) {
+    return { ok: true, reason: 'already-claimed' };
+  }
 
-    const seat = players.find(player => !player.uid);
-    if (!seat) {
-      full = true;
+  // Claim only the seat's uid field. An empty uid is legitimately null, so a
+  // fresh Firebase client's initial transaction value can safely be handled.
+  // If two guests race for one seat, the loser retries the next available seat.
+  for (const [seatKey, player] of playerEntries) {
+    if (player.uid) continue;
+
+    let occupiedByAnotherUser = false;
+    const seatUidRef = ref(db, `rooms/${code}/players/${seatKey}/uid`);
+    const result = await runTransaction(seatUidRef, existingUid => {
+      if (existingUid == null || existingUid === currentUid) return currentUid;
+      occupiedByAnotherUser = true;
       return;
+    }, { applyLocally: false });
+
+    if (result.committed && result.snapshot.val() === currentUid) {
+      return { ok: true, reason: 'claimed' };
     }
+    if (!occupiedByAnotherUser && !result.committed) {
+      return { ok: false, reason: 'conflict' };
+    }
+  }
 
-    seat.uid = currentUid;
-    seat.joined = false;
-    return players;
-  });
-
-  return result.committed && !full;
+  return { ok: false, reason: 'full' };
 }
 
 async function openRoom(code) {
   const cleanCode = sanitizePassword(code);
-  if (!/^\d{1,8}$/.test(cleanCode)) {
-    toast('Enter a room password containing 1–8 digits.');
+  if (!isValidRoomCode(cleanCode)) {
+    toast('Enter a room code containing 1–8 letters or numbers.');
     return;
   }
 
   roomJoinError = null;
+  const memberRef = () => ref(db, `rooms/${cleanCode}/members/${currentUid}`);
   try {
     await ensureAuth();
 
-    await set(ref(db, `rooms/${cleanCode}/members/${currentUid}`), true);
-    const claimed = await claimSeat(cleanCode);
+    // Membership grants the authenticated guest permission to read and claim a
+    // seat under the database rules. Remove it again if no seat can be claimed.
+    await set(memberRef(), true);
+    const claim = await claimSeat(cleanCode);
 
-    if (!claimed) {
-      await remove(ref(db, `rooms/${cleanCode}/members/${currentUid}`)).catch(() => {});
-      roomJoinError = 'This room is full.';
+    if (!claim.ok) {
+      await remove(memberRef()).catch(() => {});
+      if (claim.reason === 'full') roomJoinError = 'This room is full.';
+      else if (claim.reason === 'not-found') roomJoinError = 'Room not found. Check the code and try again.';
+      else roomJoinError = 'Could not claim a seat. Please try joining again.';
       throw new Error(roomJoinError);
     }
 
@@ -960,9 +988,11 @@ async function openRoom(code) {
     }, error => {
       toast(friendlyFirebaseError(error, 'Could not listen to this room.'));
     });
+    return true;
   } catch (error) {
-    const message = roomJoinError || friendlyFirebaseError(error, 'Room not found. Check the password and try again.');
+    const message = roomJoinError || friendlyFirebaseError(error, 'Room not found. Check the code and try again.');
     toast(message);
+    return false;
   }
 }
 
@@ -987,8 +1017,8 @@ async function createOnlineRoom() {
 
   const code = sanitizePassword($('onlinePassword').value);
   $('onlinePassword').value = code;
-  if (!/^\d{1,8}$/.test(code)) {
-    toast('Choose a room password containing 1–8 digits.');
+  if (!isValidRoomCode(code)) {
+    toast('Choose a room code containing 1–8 letters or numbers.');
     $('onlinePassword').focus();
     return;
   }
@@ -1000,12 +1030,12 @@ async function createOnlineRoom() {
     return;
   }
 
-  // If this browser already belongs to a room using this password, we can
+  // If this browser already belongs to a room using this room code, we can
   // read it and stop before overwriting it.
   try {
     const existing = await get(roomRef(code));
     if (existing.exists()) {
-      toast('That room password is already in use. Choose another.');
+      toast('That room code is already in use. Choose another.');
       return;
     }
   } catch {
@@ -1018,11 +1048,11 @@ async function createOnlineRoom() {
 
   try {
     await set(roomRef(code), room);
-    await openRoom(code);
-    toast(`Online room ${code} created. Share the password or room link.`);
+    const opened = await openRoom(code);
+    if (opened) toast(`Online room ${code} created. Share the code or room link.`);
   } catch (error) {
     const message = error?.code?.includes('permission-denied')
-      ? 'That password may already be in use, or your Firebase rules are not published.'
+      ? 'That room code may already be in use, or your Firebase rules are not published.'
       : friendlyFirebaseError(error, 'Could not create the Firebase room.');
     toast(message);
   }
@@ -1312,7 +1342,7 @@ function renderRoom() {
   const player = currentPlayer(room);
   const local = roomMode === 'local';
 
-  $('roomTypeLabel').textContent = local ? 'SINGLE-DEVICE SESSION' : 'ONLINE ROOM PASSWORD';
+  $('roomTypeLabel').textContent = local ? 'SINGLE-DEVICE SESSION' : 'ONLINE ROOM CODE';
   $('roomCode').textContent = local ? 'Shared device' : room.code;
   $('copyRoomLink').classList.toggle('hide', local);
   $('resetTestRoom').textContent = local ? 'End session' : 'Delete online room';
@@ -1400,9 +1430,9 @@ $('copyRoomLink').addEventListener('click', async () => {
   const link = roomLink();
   try {
     await navigator.clipboard.writeText(link);
-    toast(`Room link copied. Password: ${activeRoomCode}`);
+    toast(`Room link copied. Code: ${activeRoomCode}`);
   } catch {
-    window.prompt(`Copy this room link. Password: ${activeRoomCode}`, link);
+    window.prompt(`Copy this room link. Code: ${activeRoomCode}`, link);
   }
 });
 
