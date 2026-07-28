@@ -87,7 +87,7 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
   </div>
 </header>
 
-<div class="mode-tabs">
+<div id="modeTabs" class="mode-tabs">
   <button id="basicModeBtn" class="active" type="button">Basic Picker</button>
   <button id="vetoModeBtn" type="button">Last Game Standing (Veto Picker)</button>
 </div>
@@ -252,8 +252,8 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       </div>
       <div class="room-actions">
         <button id="copyRoomLink" class="btn secondary small" type="button">Copy room link</button>
-        <button id="resetTestRoom" class="btn danger small" type="button">Delete online room</button>
-        <button id="backToSetup" class="btn secondary small" type="button">Back to setup</button>
+        <button id="resetTestRoom" class="btn danger small hide" type="button">Delete online room</button>
+        <button id="backToSetup" class="btn secondary small" type="button">Leave room</button>
       </div>
     </div>
     <div id="deviceTabs" class="device-tabs"></div>
@@ -283,6 +283,8 @@ import {
   onValue,
   off,
   remove,
+  update,
+  onDisconnect,
   runTransaction
 } from 'https://www.gstatic.com/firebasejs/12.16.0/firebase-database.js';
 
@@ -323,6 +325,10 @@ let db = null;
 let authPromise = null;
 let roomListenerRef = null;
 let roomJoinError = null;
+let activeSeatKey = null;
+let disconnectCleanup = null;
+let roomExpiryTimer = null;
+const ROOM_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
@@ -417,6 +423,32 @@ function sanitizePassword(value) {
 
 function isValidRoomCode(value) {
   return /^[A-Z0-9]{1,8}$/.test(value);
+}
+
+function roomExpiresAt(room) {
+  const explicit = Number(room?.expiresAt);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const created = Number(room?.createdAt);
+  return Number.isFinite(created) && created > 0 ? created + ROOM_MAX_AGE_MS : 0;
+}
+
+function isRoomExpired(room, now = Date.now()) {
+  const expiresAt = roomExpiresAt(room);
+  return expiresAt > 0 && now >= expiresAt;
+}
+
+function clearRoomExpiryTimer() {
+  if (roomExpiryTimer) clearTimeout(roomExpiryTimer);
+  roomExpiryTimer = null;
+}
+
+function scheduleRoomExpiry(room) {
+  clearRoomExpiryTimer();
+  if (roomMode !== 'online') return;
+  const expiresAt = roomExpiresAt(room);
+  if (!expiresAt) return;
+  const delay = Math.max(0, Math.min(expiresAt - Date.now(), 2_147_000_000));
+  roomExpiryTimer = setTimeout(expireActiveRoom, delay);
 }
 
 function childAgeValue(choice) {
@@ -793,6 +825,7 @@ function buildRoomData(count, code, mode) {
     status: 'lobby',
     createdAt: now,
     updatedAt: now,
+    expiresAt: now + ROOM_MAX_AGE_MS,
     settings: {
       finalistCount,
       roundCount,
@@ -827,6 +860,7 @@ function validateVetoSetup() {
 function showRoomScreen() {
   $('setupMain').classList.add('hide');
   $('roomMain').classList.remove('hide');
+  $('modeTabs').classList.add('hide');
 }
 
 function updateRoomModeUI() {
@@ -904,25 +938,36 @@ function stopRoomListener() {
 }
 
 async function claimSeat(code) {
-  const playersRef = ref(db, `rooms/${code}/players`);
-  const snapshot = await get(playersRef);
+  const snapshot = await get(roomRef(code));
   if (!snapshot.exists()) return { ok: false, reason: 'not-found' };
 
-  const rawPlayers = snapshot.val() || {};
+  const room = normalizeRoom(snapshot.val());
+  if (isRoomExpired(room)) {
+    try {
+      await remove(roomRef(code));
+    } catch (error) {
+      console.warn('Expired room could not be deleted immediately.', error);
+    }
+    return { ok: false, reason: 'expired' };
+  }
+
+  const rawPlayers = snapshot.val()?.players || {};
   const playerEntries = Array.isArray(rawPlayers)
     ? rawPlayers.map((player, index) => [String(index), player]).filter(([, player]) => player)
     : Object.entries(rawPlayers).filter(([, player]) => player);
 
   if (!playerEntries.length) return { ok: false, reason: 'not-found' };
-  if (playerEntries.some(([, player]) => player.uid === currentUid)) {
-    return { ok: true, reason: 'already-claimed' };
+
+  const existingEntry = playerEntries.find(([, player]) => player.uid === currentUid);
+  if (existingEntry) {
+    return { ok: true, reason: 'already-claimed', seatKey: existingEntry[0], player: existingEntry[1] };
   }
 
-  // Claim only the seat's uid field. An empty uid is legitimately null, so a
-  // fresh Firebase client's initial transaction value can safely be handled.
-  // If two guests race for one seat, the loser retries the next available seat.
+  // The host seat remains reserved for the room owner, even after the host
+  // deliberately leaves or closes the browser.
   for (const [seatKey, player] of playerEntries) {
     if (player.uid) continue;
+    if (player.host && room.ownerUid !== currentUid) continue;
 
     let occupiedByAnotherUser = false;
     const seatUidRef = ref(db, `rooms/${code}/players/${seatKey}/uid`);
@@ -933,7 +978,7 @@ async function claimSeat(code) {
     }, { applyLocally: false });
 
     if (result.committed && result.snapshot.val() === currentUid) {
-      return { ok: true, reason: 'claimed' };
+      return { ok: true, reason: 'claimed', seatKey, player };
     }
     if (!occupiedByAnotherUser && !result.committed) {
       return { ok: false, reason: 'conflict' };
@@ -941,6 +986,50 @@ async function claimSeat(code) {
   }
 
   return { ok: false, reason: 'full' };
+}
+
+function seatResetName(player) {
+  if (!player) return 'Voter';
+  return player.host ? 'Host' : (player.deviceLabel || 'Voter');
+}
+
+async function cancelDisconnectCleanup() {
+  if (!disconnectCleanup) return;
+  try {
+    await disconnectCleanup.cancel();
+  } catch (error) {
+    console.warn('Could not cancel disconnect cleanup.', error);
+  }
+  disconnectCleanup = null;
+}
+
+async function configureDisconnectCleanup(code, seatKey, player) {
+  await cancelDisconnectCleanup();
+  const cleanup = onDisconnect(roomRef(code));
+  await cleanup.update({
+    [`players/${seatKey}/uid`]: null,
+    [`players/${seatKey}/joined`]: false,
+    [`players/${seatKey}/name`]: seatResetName(player),
+    [`members/${currentUid}`]: null,
+    updatedAt: Date.now()
+  });
+  disconnectCleanup = cleanup;
+}
+
+async function releaseOnlineSeat(code = activeRoomCode, seatKey = activeSeatKey) {
+  if (!code || !db || !currentUid) return;
+  const player = activeRoom?.players?.find(seat => seat.uid === currentUid)
+    || activeRoom?.players?.find(seat => seat.id === (seatKey === '0' ? 'host' : null));
+  const changes = {
+    [`members/${currentUid}`]: null,
+    updatedAt: Date.now()
+  };
+  if (seatKey != null) {
+    changes[`players/${seatKey}/uid`] = null;
+    changes[`players/${seatKey}/joined`] = false;
+    changes[`players/${seatKey}/name`] = seatResetName(player);
+  }
+  await update(roomRef(code), changes);
 }
 
 async function openRoom(code) {
@@ -963,6 +1052,7 @@ async function openRoom(code) {
     if (!claim.ok) {
       await remove(memberRef()).catch(() => {});
       if (claim.reason === 'full') roomJoinError = 'This room is full.';
+      else if (claim.reason === 'expired') roomJoinError = 'This room expired after 12 hours.';
       else if (claim.reason === 'not-found') roomJoinError = 'Room not found. Check the code and try again.';
       else roomJoinError = 'Could not claim a seat. Please try joining again.';
       throw new Error(roomJoinError);
@@ -970,20 +1060,36 @@ async function openRoom(code) {
 
     roomMode = 'online';
     activeRoomCode = cleanCode;
+    activeSeatKey = claim.seatKey;
     viewingDeviceId = null;
     showRoomScreen();
     history.replaceState({}, '', roomLink(cleanCode));
+
+    try {
+      await configureDisconnectCleanup(cleanCode, claim.seatKey, claim.player);
+    } catch (error) {
+      console.warn('Automatic seat cleanup could not be registered.', error);
+    }
 
     stopRoomListener();
     roomListenerRef = roomRef(cleanCode);
     onValue(roomListenerRef, snapshot => {
       if (!snapshot.exists()) {
         activeRoom = null;
-        toast('This room was deleted.');
-        returnToSetup();
+        cancelDisconnectCleanup().finally(() => {
+          resetRoomUI();
+          toast('This room was deleted or expired.');
+        });
         return;
       }
-      activeRoom = normalizeRoom(snapshot.val());
+      const room = normalizeRoom(snapshot.val());
+      if (isRoomExpired(room)) {
+        activeRoom = room;
+        expireActiveRoom();
+        return;
+      }
+      activeRoom = room;
+      scheduleRoomExpiry(room);
       renderRoom();
     }, error => {
       toast(friendlyFirebaseError(error, 'Could not listen to this room.'));
@@ -996,19 +1102,68 @@ async function openRoom(code) {
   }
 }
 
-function returnToSetup() {
+function resetRoomUI() {
   stopRoomListener();
+  clearRoomExpiryTimer();
   activeRoomCode = null;
   activeRoom = null;
+  activeSeatKey = null;
   roomMode = null;
   viewingDeviceId = null;
   roomJoinError = null;
   $('roomMain').classList.add('hide');
   $('setupMain').classList.remove('hide');
+  $('modeTabs').classList.remove('hide');
   const cleanUrl = new URL(location.href);
   cleanUrl.search = '';
   history.replaceState({}, '', cleanUrl);
   renderSetup();
+}
+
+async function leaveRoom() {
+  if (roomMode === 'local') {
+    resetRoomUI();
+    toast('Single-device session ended.');
+    return;
+  }
+
+  const code = activeRoomCode;
+  const seatKey = activeSeatKey;
+  stopRoomListener();
+  clearRoomExpiryTimer();
+
+  let released = false;
+  try {
+    await releaseOnlineSeat(code, seatKey);
+    released = true;
+  } catch (error) {
+    console.warn('Could not release the online seat immediately.', error);
+  }
+
+  if (released) await cancelDisconnectCleanup();
+  resetRoomUI();
+  toast(released
+    ? 'You left the room. You can rejoin with the same code.'
+    : 'You left the room. Your seat will clear when this browser disconnects.');
+}
+
+async function expireActiveRoom() {
+  if (roomMode !== 'online' || !activeRoomCode) return;
+  const code = activeRoomCode;
+  const player = activeRoom ? currentPlayer(activeRoom) : null;
+  const wasHost = Boolean(player?.host);
+
+  stopRoomListener();
+  clearRoomExpiryTimer();
+  await cancelDisconnectCleanup();
+  try {
+    if (wasHost) await remove(roomRef(code));
+    else await releaseOnlineSeat(code, activeSeatKey);
+  } catch (error) {
+    console.warn('Expired room cleanup could not finish immediately.', error);
+  }
+  resetRoomUI();
+  toast('This room expired after 12 hours.');
 }
 
 async function createOnlineRoom() {
@@ -1030,29 +1185,40 @@ async function createOnlineRoom() {
     return;
   }
 
-  // If this browser already belongs to a room using this room code, we can
-  // read it and stop before overwriting it.
-  try {
-    const existing = await get(roomRef(code));
-    if (existing.exists()) {
-      toast('That room code is already in use. Choose another.');
-      return;
-    }
-  } catch {
-    // Other people's rooms are intentionally unreadable. The protected write
-    // below will reject a collision without exposing the room.
-  }
-
   const room = buildRoomData(count, code, 'online');
   if (!room) return;
 
+  const temporaryMemberRef = ref(db, `rooms/${code}/members/${currentUid}`);
+  let collision = false;
   try {
-    await set(roomRef(code), room);
+    // A temporary membership lets this client inspect an existing room. Active
+    // rooms are preserved; expired rooms and empty membership placeholders can
+    // be replaced so their codes become reusable.
+    await set(temporaryMemberRef, true);
+    const result = await runTransaction(roomRef(code), rawRoom => {
+      const placeholder = rawRoom
+        && !rawRoom.createdAt
+        && !rawRoom.players
+        && Object.keys(rawRoom).every(key => key === 'members');
+      if (!rawRoom || placeholder || isRoomExpired(rawRoom)) return room;
+      collision = true;
+      return;
+    }, { applyLocally: false });
+
+    if (!result.committed) {
+      await remove(temporaryMemberRef).catch(() => {});
+      toast(collision
+        ? 'That room code is already in use. Choose another.'
+        : 'Could not reserve that room code. Try another code.');
+      return;
+    }
+
     const opened = await openRoom(code);
-    if (opened) toast(`Online room ${code} created. Share the code or room link.`);
+    if (opened) toast(`Online room ${code} created. It expires in 12 hours.`);
   } catch (error) {
+    await remove(temporaryMemberRef).catch(() => {});
     const message = error?.code?.includes('permission-denied')
-      ? 'That room code may already be in use, or your Firebase rules are not published.'
+      ? 'Firebase blocked room creation or expired-room cleanup. Your database rules may need to allow members to replace rooms after expiresAt.'
       : friendlyFirebaseError(error, 'Could not create the Firebase room.');
     toast(message);
   }
@@ -1213,21 +1379,21 @@ function restartRoom() {
 
 async function deleteRoom() {
   if (roomMode === 'local') {
-    returnToSetup();
+    resetRoomUI();
     toast('Single-device session ended.');
     return;
   }
 
   if (!activeRoomCode || !activeRoom) return;
   const player = currentPlayer(activeRoom);
-  if (!player?.host) {
-    toast('Only the host can delete the room.');
-    return;
-  }
+  if (!player?.host) return;
 
   try {
+    stopRoomListener();
+    clearRoomExpiryTimer();
+    await cancelDisconnectCleanup();
     await remove(roomRef());
-    returnToSetup();
+    resetRoomUI();
     toast('Online room deleted.');
   } catch (error) {
     toast(friendlyFirebaseError(error, 'Could not delete the room.'));
@@ -1346,6 +1512,7 @@ function renderRoom() {
   $('roomCode').textContent = local ? 'Shared device' : room.code;
   $('copyRoomLink').classList.toggle('hide', local);
   $('resetTestRoom').textContent = local ? 'End session' : 'Delete online room';
+  $('resetTestRoom').classList.toggle('hide', !local && !player?.host);
   renderDeviceTabs(room);
 
   if (!player) {
@@ -1423,7 +1590,7 @@ $('onlinePassword').addEventListener('input', event => {
   event.currentTarget.value = sanitizePassword(event.currentTarget.value);
 });
 
-$('backToSetup').addEventListener('click', returnToSetup);
+$('backToSetup').addEventListener('click', leaveRoom);
 $('resetTestRoom').addEventListener('click', deleteRoom);
 $('copyRoomLink').addEventListener('click', async () => {
   if (!activeRoomCode || roomMode !== 'online') return;
