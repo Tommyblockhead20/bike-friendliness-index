@@ -16,11 +16,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;ba
 button,input,select{font:inherit} button{cursor:pointer} a{color:inherit}.hide{display:none!important}
 header{max-width:1380px;margin:auto;padding:30px 18px 18px}.header-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,380px);gap:18px;align-items:start}.header-title{padding-top:4px}.header-join{padding:14px 16px}.header-join h2{margin:0 0 8px}.header-join label{margin-top:0}.header-join-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}.header-join-row .btn{width:auto;margin:0;min-height:42px}@media(max-width:760px){.header-layout{grid-template-columns:1fr}.header-join-row{grid-template-columns:1fr}.header-join-row .btn{width:100%}}.eyebrow{display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:rgba(12,20,37,.6);color:var(--muted);font-size:.82rem}.eyebrow b{color:var(--good)}
 h1{margin:10px 0 8px;font-size:clamp(2.1rem,5vw,4rem);line-height:.96;letter-spacing:-.055em}.subtitle{max-width:920px;color:var(--muted);line-height:1.5}
-.mode-tabs{max-width:1380px;margin:0 auto 16px;padding:0 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.mode-tabs button{border:1px solid var(--line);border-radius:16px;padding:13px;background:rgba(7,13,25,.72);color:var(--muted);font-weight:900}.mode-tabs button.active{color:white;border-color:rgba(167,139,250,.8);background:linear-gradient(135deg,rgba(124,58,237,.8),rgba(37,99,235,.68));box-shadow:0 12px 30px rgba(79,70,229,.2)}
+.mode-tabs{max-width:1380px;margin:0 auto 16px;padding:0 18px;display:grid;grid-template-columns:1fr 1fr;gap:10px}.mode-tabs button{border:1px solid var(--line);border-radius:16px;padding:13px;background:rgba(7,13,25,.72);color:var(--muted);font-weight:900}.mode-tabs button.active{color:white;border-color:rgba(167,139,250,.8);background:linear-gradient(135deg,rgba(124,58,237,.8),rgba(37,99,235,.68));box-shadow:0 12px 30px rgba(79,70,229,.2)}.veto-label-narrow{display:none}@media(max-width:799px){.veto-label-wide{display:none}.veto-label-narrow{display:inline}}
 main{max-width:1380px;margin:0 auto 56px;padding:0 18px;display:grid;grid-template-columns:370px minmax(0,1fr);gap:18px;align-items:start}@media(max-width:980px){main{grid-template-columns:1fr}.sidebar{position:static!important}}
 .sidebar{display:grid;gap:14px;position:sticky;top:12px}.card{background:var(--panel);border:1px solid rgba(255,255,255,.09);border-radius:var(--radius);box-shadow:var(--shadow);backdrop-filter:blur(18px)}.pad{padding:18px}h2{font-size:1.12rem;margin:0 0 12px}h3{margin:0;font-size:1rem}.section-title{display:flex;align-items:center;gap:8px;margin:18px 0 10px;padding:9px 10px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(56,189,248,.06)),rgba(7,13,25,.42);font-weight:900;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em}.section-title:first-of-type{margin-top:0}.section-title:after{content:"";height:1px;flex:1;background:linear-gradient(90deg,rgba(255,255,255,.17),transparent)}
 label{display:block;color:var(--muted);font-size:.84rem;margin:11px 0 6px}.field{width:100%;border:1px solid var(--line);background:rgba(7,13,25,.87);color:var(--text);border-radius:13px;padding:10px 11px;outline:none}.field:focus{border-color:rgba(167,139,250,.8);box-shadow:0 0 0 3px rgba(167,139,250,.12)}.row{display:grid;grid-template-columns:1fr 1fr;gap:9px}.checks{display:flex;flex-wrap:wrap;gap:8px}.check{display:flex;align-items:center;gap:7px;margin:0;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:rgba(7,13,25,.52);color:var(--muted);font-size:.85rem}.check input{accent-color:var(--accent)}
-.segment{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:7px}.segment button,.btn{border:1px solid var(--line);border-radius:13px;padding:10px;background:rgba(7,13,25,.72);color:var(--muted);font-weight:850}.segment button.active,.btn.primary{color:white;border-color:rgba(167,139,250,.78);background:linear-gradient(135deg,rgba(124,58,237,.78),rgba(37,99,235,.62))}.btn{width:100%;margin-top:10px}.btn:hover,.segment button:hover{filter:brightness(1.08);transform:translateY(-1px)}.btn.secondary{background:rgba(7,13,25,.72)}.btn.danger{border-color:rgba(252,165,165,.4);color:var(--bad)}.btn.small{width:auto;margin:0;padding:7px 10px;border-radius:999px;font-size:.78rem}
+.segment{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:7px}.segment button,.btn{border:1px solid var(--line);border-radius:13px;padding:10px;background:rgba(7,13,25,.72);color:var(--muted);font-weight:850}.segment button.active,.btn.primary{color:white;border-color:rgba(167,139,250,.78);background:linear-gradient(135deg,rgba(124,58,237,.78),rgba(37,99,235,.62))}.segment button.pointless{color:var(--bad);border-color:rgba(252,165,165,.58);background:rgba(127,29,29,.24);opacity:1}.segment button.pointless:disabled{color:var(--bad);opacity:.72}.btn{width:100%;margin-top:10px}.btn:hover,.segment button:hover{filter:brightness(1.08);transform:translateY(-1px)}.btn.secondary{background:rgba(7,13,25,.72)}.btn.danger{border-color:rgba(252,165,165,.4);color:var(--bad)}.btn.small{width:auto;margin:0;padding:7px 10px;border-radius:999px;font-size:.78rem}
 .help{margin-top:10px;padding:10px;border:1px dashed var(--line);border-radius:14px;background:rgba(7,13,25,.4);color:var(--muted);font-size:.79rem;line-height:1.42}.summary{color:var(--muted);font-size:.92rem;line-height:1.45}.pillbar{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.pill{border:1px solid var(--line);border-radius:999px;padding:5px 8px;background:rgba(7,13,25,.68);color:var(--muted);font-size:.73rem}.pill.good{color:var(--good);border-color:rgba(167,243,208,.35)}.pill.warn{color:var(--warn);border-color:rgba(253,230,138,.35)}.pill.bad{color:var(--bad);border-color:rgba(252,165,165,.35)}
 .results{padding:18px;min-width:0}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:11px}.game{display:flex;flex-direction:column;gap:9px;padding:13px;border:1px solid rgba(255,255,255,.085);border-radius:18px;background:linear-gradient(145deg,rgba(255,255,255,.045),transparent 28%),var(--panel2)}.game-head{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:center}.score{width:52px;height:52px;border-radius:16px;display:grid;place-items:center;background:linear-gradient(135deg,rgba(167,243,208,.26),rgba(56,189,248,.16));border:1px solid rgba(167,243,208,.36);font-weight:950}.game-title{font-weight:900;line-height:1.18}.meta{color:var(--muted);font-size:.78rem;line-height:1.4}.stats{display:flex;flex-wrap:wrap;gap:6px}.veto-btn{margin-top:auto;border:1px solid rgba(252,165,165,.4);background:rgba(127,29,29,.24);color:#fee2e2;border-radius:12px;padding:9px;font-weight:900}.veto-btn:hover{background:rgba(185,28,28,.34)}
 .formula{padding:12px;border:1px solid rgba(167,139,250,.3);border-radius:15px;background:rgba(124,58,237,.11);color:var(--muted);line-height:1.4}.formula strong{color:var(--text)}
@@ -89,15 +89,15 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
 <div id="modeTabs" class="mode-tabs">
   <button id="basicModeBtn" class="active" type="button">Basic Picker</button>
-  <button id="vetoModeBtn" type="button">Last Game Standing (Veto Picker)</button>
+  <button id="vetoModeBtn" type="button"><span class="veto-label-wide">Last Game Standing Setup (Veto Picker)</span><span class="veto-label-narrow">Veto Picker Setup</span></button>
 </div>
 
 <main id="setupMain">
   <aside class="sidebar">
     <section class="card pad">
-      <h2>Tonight’s games</h2>
+      <h2>Game Filters</h2>
 
-      <div class="section-title">Type and setting</div>
+      <div class="section-title">Type</div>
       <div class="toggle-grid">
         <button id="typeBoard" class="toggle-button active" type="button" aria-pressed="true">Board games</button>
         <button id="typeVideo" class="toggle-button" type="button" aria-pressed="false">Video games</button>
@@ -112,12 +112,18 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       </div>
       <div class="slider-labels" aria-hidden="true">
         <span style="--pos:0">1</span>
-        <span style="--pos:.076923">2</span>
-        <span style="--pos:.230769">4</span>
-        <span style="--pos:.384615">6</span>
-        <span style="--pos:.538462">8</span>
-        <span style="--pos:.692308">10</span>
-        <span style="--pos:.846154">12</span>
+        <span style="--pos:0.076923">2</span>
+        <span style="--pos:0.153846">3</span>
+        <span style="--pos:0.230769">4</span>
+        <span style="--pos:0.307692">5</span>
+        <span style="--pos:0.384615">6</span>
+        <span style="--pos:0.461538">7</span>
+        <span style="--pos:0.538462">8</span>
+        <span style="--pos:0.615385">9</span>
+        <span style="--pos:0.692308">10</span>
+        <span style="--pos:0.769231">11</span>
+        <span style="--pos:0.846154">12</span>
+        <span style="--pos:0.923077">13</span>
         <span style="--pos:1">14+</span>
       </div>
       <div id="playerQuickPicks" class="quick-picks"></div>
@@ -182,17 +188,18 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
     <section id="vetoSettings" class="card pad hide">
       <h2>Veto setup</h2>
 
-      <label>Final games remaining</label>
-      <div id="finalistButtons" class="segment" style="--cols:5"></div>
-
       <button id="sameAsPlayersToggle" class="toggle-button active full-toggle" type="button" aria-pressed="true">Vetoers match player count</button>
       <div id="customVetoersWrap" class="hide">
         <label for="vetoerCount">Number of vetoers</label>
         <input id="vetoerCount" class="field" type="number" min="1" max="12" value="4">
       </div>
 
-      <label>Veto rounds</label>
-      <div id="roundButtons" class="segment" style="--cols:5"></div>
+      <label>Rounds</label>
+      <div id="roundButtons" class="segment" style="--cols:6"></div>
+
+      <label># of games chosen</label>
+      <div id="finalistButtons" class="segment" style="--cols:5"></div>
+      <div id="candidateFormula" class="formula" style="margin-top:12px"></div>
 
       <label for="privacyMode">Veto announcement</label>
       <select id="privacyMode" class="field">
@@ -209,7 +216,7 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
       <label class="single-device-check">
         <input id="singleDeviceMode" type="checkbox">
-        <span><b>Single-device session</b><small>Everyone passes one phone or computer around. Firebase is not used.</small></span>
+        <span><b>Single-device session</b></span>
       </label>
 
       <div id="onlineRoomControls">
@@ -220,7 +227,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
       <div id="singleDeviceHelp" class="help hide">This creates local seat buttons for every vetoer. Tap a person’s button when it is their turn.</div>
 
-      <div id="candidateFormula" class="formula" style="margin-top:12px"></div>
       <button id="createRoomButton" class="btn primary" type="button">Create online room</button>
 
     </section>
@@ -236,7 +242,6 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
 
     <div id="vetoPreview" class="hide">
       <h2>Veto candidate preview</h2>
-      <div id="vetoSummary" class="summary"></div>
       <div id="vetoPreviewResults" class="grid" style="margin-top:12px"></div>
     </div>
   </section>
@@ -315,6 +320,7 @@ const splitGameComponents = {"bgg:156129":[{"id":"bgg:156129","title":"Deception
 let appMode = 'basic';
 let finalistCount = 1;
 let roundCount = 1;
+let campaignMode = 'include';
 let activeRoomCode = null;
 let activeRoom = null;
 let roomMode = null;
@@ -496,6 +502,26 @@ function toggleButton(id, onChange = renderSetup) {
   });
 }
 
+function updateCampaignToggleUI() {
+  const button = $('includeCampaignsToggle');
+  const labels = {
+    include: 'Include campaign games',
+    exclude: 'Exclude campaign games',
+    only: 'Only campaign games'
+  };
+  button.textContent = labels[campaignMode];
+  button.dataset.mode = campaignMode;
+  setToggleState(button, campaignMode !== 'exclude');
+  button.classList.toggle('campaign-only', campaignMode === 'only');
+  button.setAttribute('aria-label', `${labels[campaignMode]}. Click to change campaign filtering.`);
+}
+
+function cycleCampaignMode() {
+  campaignMode = campaignMode === 'include' ? 'exclude' : campaignMode === 'exclude' ? 'only' : 'include';
+  updateCampaignToggleUI();
+  renderSetup();
+}
+
 function buildPlayerQuickPicks() {
   const container = $('playerQuickPicks');
   container.innerHTML = '';
@@ -541,7 +567,9 @@ function getFilters() {
     lengthChoice: $('lengthChoice').value,
     weightChoice: $('weightChoice').value,
     includeNew: isActive('tryNewGamesToggle'),
-    includeCampaigns: isActive('includeCampaignsToggle'),
+    campaignMode,
+    includeCampaigns: campaignMode !== 'exclude',
+    onlyCampaigns: campaignMode === 'only',
     mergeCompatible: isActive('mergeCompatibleToggle'),
     search: $('search').value.trim().toLowerCase(),
     thomas: isActive('thomasPlayingToggle'),
@@ -554,7 +582,9 @@ function eligible(g, f, strictPreferences) {
   if (f.settings.length && !f.settings.some(setting => g[setting])) return false;
   if (f.players != null && !(g.minPlayers <= f.players && f.players <= g.maxPlayers)) return false;
   if (f.age != null && g.ageMin != null && g.ageMin > f.age) return false;
-  if (!f.includeCampaigns && g.campaign) return false;
+  const selectedCampaignMode = f.campaignMode || (f.onlyCampaigns ? 'only' : f.includeCampaigns === false ? 'exclude' : 'include');
+  if (selectedCampaignMode === 'exclude' && g.campaign) return false;
+  if (selectedCampaignMode === 'only' && !g.campaign) return false;
   if (!f.includeNew && g.thomasRating == null && g.alexisRating == null) return false;
   if (f.search && !`${g.title} ${g.displayTitle} ${g.tag}`.toLowerCase().includes(f.search)) return false;
   if (strictPreferences && !lengthMatches(g, f.lengthChoice)) return false;
@@ -638,7 +668,8 @@ function renderFilters() {
   if (f.childChoice !== 'none') pills.push($('childAge').selectedOptions[0].textContent);
   if (f.lengthChoice !== 'any') pills.push($('lengthChoice').selectedOptions[0].textContent);
   if (f.weightChoice !== 'any') pills.push($('weightChoice').selectedOptions[0].textContent);
-  if (!f.includeCampaigns) pills.push('no campaign games');
+  if (f.campaignMode === 'exclude') pills.push('no campaign games');
+  if (f.campaignMode === 'only') pills.push('campaign games only');
   if (!f.includeNew) pills.push('rated games only');
   if (!f.mergeCompatible) pills.push('compatible games split');
 
@@ -664,20 +695,93 @@ function vetoerCount() {
 }
 
 function candidateTarget() {
-  return vetoerCount() * roundCount + finalistCount;
+  return (vetoerCount() || 0) * (roundCount || 0) + (finalistCount || 0);
+}
+
+function roundOptionsForVetoers(count) {
+  if (count <= 1) return [5, 10, 15, 20, 25, 30];
+  if (count === 2) return [2, 4, 6, 8, 10, 15];
+  if (count === 3) return [2, 3, 4, 6, 8, 10];
+  if (count === 4) return [2, 3, 4, 5, 6, 7];
+  if (count === 5) return [1, 2, 3, 4, 5, 6];
+  if (count === 6) return [1, 2, 3, 4, 5];
+  return [1, 2, 3, 4];
+}
+
+function finalistOptionIsPointless(value, eligibleCount) {
+  return eligibleCount <= value;
+}
+
+function roundOptionIsPointless(value, eligibleCount, selectedFinalists, count) {
+  if (!count || !selectedFinalists) return true;
+  const possibleVetoes = Math.max(0, eligibleCount - selectedFinalists);
+  return possibleVetoes <= 0 || (value - 1) * count >= possibleVetoes;
+}
+
+function renderChoiceButtons(containerId, options, selectedValue, onSelect, isPointless) {
+  const container = $(containerId);
+  container.style.setProperty('--cols', Math.min(options.length, 6));
+  container.innerHTML = '';
+  options.forEach(value => {
+    const pointless = isPointless(value);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = value;
+    button.disabled = pointless;
+    button.classList.toggle('pointless', pointless);
+    button.classList.toggle('active', !pointless && selectedValue === value);
+    if (pointless) button.title = 'This option would add no useful vetoes.';
+    button.addEventListener('click', () => {
+      if (pointless) return;
+      onSelect(value);
+      renderVetoPreview();
+    });
+    container.appendChild(button);
+  });
+}
+
+function normalizeVetoChoices(list) {
+  const eligibleCount = list.length;
+  const finalistOptions = [1, 2, 3, 4, 5];
+  const validFinalists = finalistOptions.filter(value => !finalistOptionIsPointless(value, eligibleCount));
+  if (!validFinalists.includes(finalistCount)) finalistCount = validFinalists[0] || 0;
+
+  const count = vetoerCount();
+  const roundOptions = roundOptionsForVetoers(count);
+  const validRounds = roundOptions.filter(value => !roundOptionIsPointless(value, eligibleCount, finalistCount, count));
+  if (!validRounds.includes(roundCount)) roundCount = validRounds[0] || 0;
+  return { finalistOptions, roundOptions };
 }
 
 function renderVetoPreview() {
   const list = rankedGames(true);
+  const { finalistOptions, roundOptions } = normalizeVetoChoices(list);
+  const count = vetoerCount();
+
+  renderChoiceButtons(
+    'roundButtons',
+    roundOptions,
+    roundCount,
+    value => { roundCount = value; },
+    value => roundOptionIsPointless(value, list.length, finalistCount, count)
+  );
+  renderChoiceButtons(
+    'finalistButtons',
+    finalistOptions,
+    finalistCount,
+    value => { finalistCount = value; },
+    value => finalistOptionIsPointless(value, list.length)
+  );
+
   const needed = candidateTarget();
-  const preview = list.slice(0, Math.min(needed, 12));
-  $('candidateFormula').innerHTML = `<strong>${vetoerCount() || '?'} vetoers × ${roundCount} rounds + ${finalistCount} finalists = ${needed || '?'} starting candidates</strong><br>${list.length} games currently pass the strict filters.`;
-  $('vetoSummary').textContent = needed
-    ? `The room will take the top ${needed} eligible games by recommendation score. This preview shows up to 12.`
-    : 'Enter a player/vetoer count to calculate candidates.';
-  $('vetoPreviewResults').innerHTML = preview.length
-    ? preview.map(g => gameCard(g)).join('')
-    : '<div class="waiting">No games match the current strict filters.</div>';
+  const vetoerWord = count === 1 ? 'vetoer' : 'vetoers';
+  const roundWord = roundCount === 1 ? 'round' : 'rounds';
+  const finalistWord = finalistCount === 1 ? 'finalist' : 'finalists';
+  const gameWord = list.length === 1 ? 'game' : 'games';
+  $('candidateFormula').innerHTML = `<strong>${count || '?'} ${vetoerWord} × ${roundCount || '?'} ${roundWord} + ${finalistCount || '?'} ${finalistWord} = ${needed || '?'} maximum starting games</strong><br>${list.length} ${gameWord} currently pass the filters.`;
+  $('vetoPreviewResults').innerHTML = list.length
+    ? list.map(g => gameCard(g)).join('')
+    : '<div class="waiting">No games match the current filters.</div>';
 }
 
 function renderSetup() {
@@ -694,23 +798,6 @@ function setMode(mode) {
   $('basicPanel').classList.toggle('hide', mode !== 'basic');
   $('vetoPreview').classList.toggle('hide', mode !== 'veto');
   renderSetup();
-}
-
-function buildChoiceButtons(containerId, count, getValue, setValue) {
-  const container = $(containerId);
-  container.innerHTML = '';
-  for (let i = 1; i <= count; i++) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.textContent = i;
-    button.classList.toggle('active', getValue() === i);
-    button.addEventListener('click', () => {
-      setValue(i);
-      buildChoiceButtons(containerId, count, getValue, setValue);
-      renderVetoPreview();
-    });
-    container.appendChild(button);
-  }
 }
 
 function applyPrivacyTurnOrderDefault() {
@@ -825,7 +912,6 @@ function buildRoomData(count, code, mode) {
     status: 'lobby',
     createdAt: now,
     updatedAt: now,
-    expiresAt: now + ROOM_MAX_AGE_MS,
     settings: {
       finalistCount,
       roundCount,
@@ -854,6 +940,10 @@ function validateVetoSetup() {
     toast('Veto sessions currently support up to 12 vetoers.');
     return null;
   }
+  if (!finalistCount || !roundCount) {
+    toast('The current filters do not leave enough games for any available veto setup.');
+    return null;
+  }
   return count;
 }
 
@@ -877,7 +967,7 @@ function updateFirebaseStatus(message, status = 'warn') {
   el.textContent = message;
 }
 
-function initializeFirebase() {
+async function initializeFirebase() {
   if (!isFirebaseConfigured()) {
     updateFirebaseStatus('Firebase configuration is missing. Single-device sessions still work.', 'warn');
     $('joinRoomButton').disabled = true;
@@ -888,6 +978,8 @@ function initializeFirebase() {
     const app = initializeApp(firebaseConfig);
     auth = getAuth(app);
     db = getDatabase(app);
+    updateFirebaseStatus('Connecting and signing in to Firebase…', 'warn');
+    await ensureAuth();
     updateFirebaseStatus('Firebase connected. Online rooms are ready.', 'good');
   } catch (error) {
     updateFirebaseStatus(friendlyFirebaseError(error, 'Firebase initialization failed. Single-device sessions still work.'), 'bad');
@@ -1188,37 +1280,33 @@ async function createOnlineRoom() {
   const room = buildRoomData(count, code, 'online');
   if (!room) return;
 
-  const temporaryMemberRef = ref(db, `rooms/${code}/members/${currentUid}`);
-  let collision = false;
+  // v1.5 attempted to create a temporary member under a room that did not yet
+  // exist. The deployed database rules reject that write. Use the direct room
+  // creation flow that worked in v1.4. Expiration is calculated from createdAt,
+  // so the room data stays compatible with the existing database rules.
   try {
-    // A temporary membership lets this client inspect an existing room. Active
-    // rooms are preserved; expired rooms and empty membership placeholders can
-    // be replaced so their codes become reusable.
-    await set(temporaryMemberRef, true);
-    const result = await runTransaction(roomRef(code), rawRoom => {
-      const placeholder = rawRoom
-        && !rawRoom.createdAt
-        && !rawRoom.players
-        && Object.keys(rawRoom).every(key => key === 'members');
-      if (!rawRoom || placeholder || isRoomExpired(rawRoom)) return room;
-      collision = true;
-      return;
-    }, { applyLocally: false });
-
-    if (!result.committed) {
-      await remove(temporaryMemberRef).catch(() => {});
-      toast(collision
-        ? 'That room code is already in use. Choose another.'
-        : 'Could not reserve that room code. Try another code.');
-      return;
+    try {
+      const existingSnapshot = await get(roomRef(code));
+      if (existingSnapshot.exists()) {
+        const existingRoom = normalizeRoom(existingSnapshot.val());
+        if (isRoomExpired(existingRoom)) await remove(roomRef(code));
+        else {
+          toast('That room code is already in use. Choose another.');
+          return;
+        }
+      }
+    } catch (error) {
+      if (!error?.code?.includes('permission-denied')) throw error;
+      // Other users' rooms are intentionally unreadable. The protected write
+      // below will reject a collision without exposing room data.
     }
 
+    await set(roomRef(code), room);
     const opened = await openRoom(code);
     if (opened) toast(`Online room ${code} created. It expires in 12 hours.`);
   } catch (error) {
-    await remove(temporaryMemberRef).catch(() => {});
     const message = error?.code?.includes('permission-denied')
-      ? 'Firebase blocked room creation or expired-room cleanup. Your database rules may need to allow members to replace rooms after expiresAt.'
+      ? 'That room code is already in use, or Firebase blocked room creation.'
       : friendlyFirebaseError(error, 'Could not create the Firebase room.');
     toast(message);
   }
@@ -1435,7 +1523,7 @@ function renderLobby(room, player) {
     <input id="deviceName" class="field" value="${esc(player.name)}" maxlength="30">
     <button id="joinDevice" class="btn primary" type="button">${player.joined ? 'Update name' : 'Join session'}</button>
     ${player.host ? `<div class="section-title">Host controls</div>
-      <div class="formula"><strong>${room.settings.actualCandidateCount} starting candidates</strong><br>${room.turns.length} vetoes planned, leaving ${room.settings.finalistCount} finalist${room.settings.finalistCount === 1 ? '' : 's'}.</div>
+      <div class="formula"><strong>${room.settings.actualCandidateCount} maximum starting games</strong><br>${room.turns.length} vetoes planned, leaving ${room.settings.finalistCount} finalist${room.settings.finalistCount === 1 ? '' : 's'}.</div>
       ${local ? '<button id="autoJoinAll" class="btn secondary" type="button">Auto-fill and join every vetoer</button>' : ''}
       <button id="startRoom" class="btn primary" type="button" ${allJoined ? '' : 'disabled'}>Start veto session</button>` : ''}
     <div class="section-title">Lobby</div>
@@ -1564,7 +1652,7 @@ $('basicModeBtn').addEventListener('click', () => setMode('basic'));
 $('vetoModeBtn').addEventListener('click', () => setMode('veto'));
 
 ['typeBoard', 'typeVideo', 'settingInPerson', 'settingOnline', 'tryNewGamesToggle',
- 'includeCampaignsToggle', 'mergeCompatibleToggle', 'thomasPlayingToggle',
+ 'mergeCompatibleToggle', 'thomasPlayingToggle',
  'alexisPlayingToggle'].forEach(id => toggleButton(id));
 
 toggleButton('sameAsPlayersToggle', () => {
@@ -1612,10 +1700,10 @@ $('playerCount').addEventListener('input', () => {
   renderSetup();
 });
 $('vetoerCount').addEventListener('input', renderVetoPreview);
+$('includeCampaignsToggle').addEventListener('click', cycleCampaignMode);
 
-buildChoiceButtons('finalistButtons', 5, () => finalistCount, value => { finalistCount = value; });
-buildChoiceButtons('roundButtons', 5, () => roundCount, value => { roundCount = value; });
 buildPlayerQuickPicks();
+updateCampaignToggleUI();
 applyPrivacyTurnOrderDefault();
 updateRoomModeUI();
 initializeFirebase();
