@@ -375,12 +375,25 @@ function toast(message) {
 
 function friendlyFirebaseError(error, fallback = 'Firebase could not complete that action.') {
   console.error(error);
-  const code = error?.code || '';
-  if (code.includes('operation-not-allowed')) return 'Anonymous sign-in is not enabled in Firebase yet.';
-  if (code.includes('permission-denied')) return 'Firebase blocked the request. Check your Realtime Database rules.';
-  if (code.includes('network-request-failed')) return 'Could not reach Firebase. Check your internet connection.';
-  if (code.includes('invalid-api-key')) return 'The Firebase config has an invalid API key.';
+  const details = `${error?.code || ''} ${error?.name || ''} ${error?.message || ''}`.toLowerCase();
+  if (details.includes('operation-not-allowed')) return 'Anonymous sign-in is not enabled in Firebase yet.';
+  if (details.includes('permission-denied') || details.includes('permission_denied') || details.includes('permission denied')) return 'Firebase blocked the request. Check your Realtime Database rules.';
+  if (details.includes('network-request-failed') || details.includes('failed to fetch') || details.includes('networkerror')) return 'Could not reach Firebase. Check your internet connection.';
+  if (details.includes('invalid-api-key') || details.includes('api key not valid')) return 'The Firebase config has an invalid API key.';
+  if (details.includes('unauthorized-domain')) return 'This preview domain is not authorized in Firebase Authentication.';
   return fallback;
+}
+
+function safeReplaceState(url) {
+  try {
+    history.replaceState({}, '', url);
+    return true;
+  } catch (error) {
+    // Sandboxed previews can allow Firebase while blocking history/URL edits.
+    // A failed URL update should never make an otherwise valid room fail.
+    console.warn('The preview blocked a URL update. The room can still be used by code.', error);
+    return false;
+  }
 }
 
 function randomCode() {
@@ -1297,7 +1310,7 @@ async function openRoom(code) {
     activeSeatKey = claim.seatKey;
     viewingDeviceId = null;
     showRoomScreen();
-    history.replaceState({}, '', roomLink(cleanCode));
+    safeReplaceState(roomLink(cleanCode));
 
     try {
       await configureDisconnectCleanup(cleanCode, claim.seatKey, claim.player);
@@ -1350,7 +1363,7 @@ function resetRoomUI() {
   $('modeTabs').classList.remove('hide');
   const cleanUrl = new URL(location.href);
   cleanUrl.search = '';
-  history.replaceState({}, '', cleanUrl);
+  safeReplaceState(cleanUrl);
   renderSetup();
 }
 
@@ -1438,7 +1451,9 @@ async function createOnlineRoom() {
         }
       }
     } catch (error) {
-      if (!error?.code?.includes('permission-denied')) throw error;
+      const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+      const denied = details.includes('permission-denied') || details.includes('permission_denied') || details.includes('permission denied');
+      if (!denied) throw error;
       // Other users' rooms are intentionally unreadable. The protected write
       // below will reject a collision without exposing room data.
     }
@@ -1446,10 +1461,14 @@ async function createOnlineRoom() {
     await set(roomRef(code), room);
     const opened = await openRoom(code);
     if (opened) toast(`Online room ${code} created. It expires in 12 hours.`);
+    else toast(`Room ${code} was created, but this preview could not open it automatically. Join with the room code.`);
   } catch (error) {
-    const message = error?.code?.includes('permission-denied')
+    const details = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+    const denied = details.includes('permission-denied') || details.includes('permission_denied') || details.includes('permission denied');
+    const message = denied
       ? 'That room code is already in use, or Firebase blocked room creation.'
-      : friendlyFirebaseError(error, 'Could not create the Firebase room.');
+      : friendlyFirebaseError(error, `Could not create the Firebase room${error?.code ? ` (${error.code})` : ''}.`);
+    updateFirebaseStatus(message, 'bad');
     toast(message);
   }
 }
