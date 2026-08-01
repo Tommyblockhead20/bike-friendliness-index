@@ -220,7 +220,7 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
       <label for="privacyMode">Veto announcement</label>
       <select id="privacyMode" class="field">
         <option value="public">Public — announce who vetoed what</option>
-        <option value="private">Private — announce the game only</option>
+        <option value="private">Anonymous — only the host sees picker names</option>
       </select>
 
       <label for="turnOrder">Turn order</label>
@@ -229,6 +229,14 @@ button:disabled{cursor:not-allowed;opacity:.5;transform:none!important;filter:no
         <option value="random">Randomize every round</option>
         <option value="snake">Snake order</option>
       </select>
+
+      <label for="stallMode">If the current picker stalls</label>
+      <select id="stallMode" class="field">
+        <option value="timer">20-second timer — then anyone may veto</option>
+        <option value="vote">Vote to skip — at least half must agree</option>
+        <option value="none" selected>Neither — wait for the assigned picker</option>
+      </select>
+      <div class="help">Timer mode opens the same veto to the first person who clicks after 20 seconds. Vote-to-skip reassigns the current turn once at least half of the room votes.</div>
 
       <label class="single-device-check">
         <input id="singleDeviceMode" type="checkbox">
@@ -351,7 +359,9 @@ let roomJoinError = null;
 let activeSeatKey = null;
 let disconnectCleanup = null;
 let roomExpiryTimer = null;
+let roomClockTimer = null;
 const ROOM_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+const TURN_OPEN_DELAY_MS = 20 * 1000;
 
 const $ = id => document.getElementById(id);
 const $$ = sel => [...document.querySelectorAll(sel)];
@@ -975,11 +985,19 @@ function normalizeRoom(room) {
   if (!room) return null;
   return {
     ...room,
+    settings: {
+      ...(room.settings || {}),
+      // Old rooms do not have this field. Treat them exactly like the original
+      // picker so opening a pre-v1.10 room cannot introduce a timer or skip vote.
+      stallMode: room.settings?.stallMode || 'none'
+    },
     players: Array.isArray(room.players) ? room.players : Object.values(room.players || {}),
     turns: Array.isArray(room.turns) ? room.turns : Object.values(room.turns || {}),
     candidateIds: Array.isArray(room.candidateIds) ? room.candidateIds : Object.values(room.candidateIds || {}),
     remainingIds: Array.isArray(room.remainingIds) ? room.remainingIds : Object.values(room.remainingIds || {}),
     vetoes: Array.isArray(room.vetoes) ? room.vetoes : Object.values(room.vetoes || {}),
+    skips: Array.isArray(room.skips) ? room.skips : Object.values(room.skips || {}),
+    skipVotes: room.skipVotes || {},
     members: room.members || {},
     gameSnapshots: room.gameSnapshots || {}
   };
@@ -987,6 +1005,37 @@ function normalizeRoom(room) {
 
 function currentTurn(room) {
   return (room.turns || [])[room.vetoes?.length || 0] || null;
+}
+
+function turnStartedAt(room) {
+  return Number(room.turnStartedAt || room.startedAt || room.updatedAt || room.createdAt || Date.now());
+}
+
+function timerHasOpened(room) {
+  return room.settings?.stallMode === 'timer' && Date.now() >= turnStartedAt(room) + TURN_OPEN_DELAY_MS;
+}
+
+function timerSecondsRemaining(room) {
+  return Math.max(0, Math.ceil((turnStartedAt(room) + TURN_OPEN_DELAY_MS - Date.now()) / 1000));
+}
+
+function skipThreshold(room) {
+  return Math.max(1, Math.ceil((room.players?.length || 1) / 2));
+}
+
+function skipVoteCount(room) {
+  return Object.values(room.skipVotes || {}).filter(Boolean).length;
+}
+
+function maySeePickerName(room, player) {
+  return room.settings?.privacy === 'public' || Boolean(player?.host);
+}
+
+function nextPlayerId(room, currentPlayerId) {
+  const players = room.players || [];
+  if (players.length < 2) return currentPlayerId;
+  const index = players.findIndex(player => player.id === currentPlayerId);
+  return players[(Math.max(index, 0) + 1) % players.length]?.id || currentPlayerId;
 }
 
 function currentPlayer(room) {
@@ -1072,6 +1121,7 @@ function buildRoomData(count, code, mode) {
       roundCount,
       privacy: $('privacyMode').value,
       turnOrder: $('turnOrder').value,
+      stallMode: $('stallMode').value,
       requestedCandidates: requested,
       actualCandidateCount,
       filters: getFilters()
@@ -1081,7 +1131,10 @@ function buildRoomData(count, code, mode) {
     candidateIds: candidates.map(game => game.id),
     remainingIds: candidates.map(game => game.id),
     gameSnapshots: snapshots,
-    vetoes: []
+    vetoes: [],
+    skips: [],
+    skipVotes: {},
+    turnStartedAt: null
   };
 }
 
@@ -1102,10 +1155,35 @@ function validateVetoSetup() {
   return count;
 }
 
+function stopRoomClock() {
+  if (roomClockTimer) {
+    clearInterval(roomClockTimer);
+    roomClockTimer = null;
+  }
+}
+
+function startRoomClock() {
+  if (roomClockTimer) return;
+  roomClockTimer = setInterval(() => {
+    if (activeRoom?.status !== 'voting' || activeRoom.settings?.stallMode !== 'timer') return;
+    const seconds = timerSecondsRemaining(activeRoom);
+    $$('[data-turn-countdown]').forEach(element => {
+      element.textContent = `${seconds}s`;
+    });
+    const state = $('turnAccessState');
+    if (timerHasOpened(activeRoom) && state?.dataset.timerOpen !== 'true') {
+      // Re-render exactly once when access opens. Replacing the entire game
+      // grid every second would make buttons annoyingly move under a click.
+      renderRoom();
+    }
+  }, 500);
+}
+
 function showRoomScreen() {
   $('setupMain').classList.add('hide');
   $('roomMain').classList.remove('hide');
   $('modeTabs').classList.add('hide');
+  startRoomClock();
 }
 
 function updateRoomModeUI() {
@@ -1351,6 +1429,7 @@ async function openRoom(code) {
 
 function resetRoomUI() {
   stopRoomListener();
+  stopRoomClock();
   clearRoomExpiryTimer();
   activeRoomCode = null;
   activeRoom = null;
@@ -1577,6 +1656,9 @@ function startRoom() {
     if (!ready) return 'Every vetoer must join first.';
     room.status = room.remainingIds.length <= room.settings.finalistCount ? 'results' : 'voting';
     room.startedAt = Date.now();
+    room.turnStartedAt = room.startedAt;
+    room.skipVotes = {};
+    room.skips = room.skips || [];
     return true;
   });
 }
@@ -1587,22 +1669,71 @@ function vetoGame(gameId, hostOverride = false) {
     const turn = currentTurn(room);
     const player = currentPlayer(room);
     if (!turn || !player) return 'The current turn could not be found.';
-    if (!hostOverride && turn.playerId !== player.id) return 'It is not your turn.';
+
+    const openedByTimer = room.settings?.stallMode === 'timer'
+      && Date.now() >= turnStartedAt(room) + TURN_OPEN_DELAY_MS;
+    if (!hostOverride && turn.playerId !== player.id && !openedByTimer) {
+      return room.settings?.privacy === 'private' ? 'It is not your turn yet.' : 'It is not your turn.';
+    }
     if (hostOverride && !player.host) return 'Only the host can use the random-veto control.';
     if (!room.remainingIds.includes(gameId)) return 'That game has already been removed.';
     if (room.remainingIds.length <= room.settings.finalistCount) return 'The finalist target has already been reached.';
 
+    const now = Date.now();
     room.remainingIds = room.remainingIds.filter(id => id !== gameId);
     room.vetoes = room.vetoes || [];
     room.vetoes.push({
-      playerId: turn.playerId,
+      // playerId is the person who actually clicked. turnPlayerId preserves
+      // who was originally assigned when timer takeover mode is used.
+      playerId: player.id,
+      turnPlayerId: turn.playerId,
       gameId,
       round: turn.round,
-      at: Date.now()
+      at: now,
+      timerTakeover: openedByTimer && turn.playerId !== player.id
     });
+    room.skipVotes = {};
+    room.turnStartedAt = now;
 
     if (room.remainingIds.length <= room.settings.finalistCount || room.vetoes.length >= room.turns.length) {
       room.status = 'results';
+    }
+    return true;
+  });
+}
+
+function toggleSkipVote() {
+  mutateRoom(room => {
+    if (room.status !== 'voting') return 'This room is not accepting skip votes.';
+    if (room.settings?.stallMode !== 'vote') return 'Vote-to-skip is not enabled for this room.';
+    const turn = currentTurn(room);
+    const player = currentPlayer(room);
+    if (!turn || !player?.joined) return 'Your player seat is not ready.';
+    if ((room.players || []).length < 2) return 'A one-player room cannot vote to skip.';
+
+    room.skipVotes = room.skipVotes || {};
+    if (room.skipVotes[player.id]) delete room.skipVotes[player.id];
+    else room.skipVotes[player.id] = true;
+
+    const votes = skipVoteCount(room);
+    const threshold = skipThreshold(room);
+    if (votes >= threshold) {
+      const skippedPlayerId = turn.playerId;
+      const reassignedPlayerId = nextPlayerId(room, skippedPlayerId);
+      room.skips = room.skips || [];
+      room.skips.push({
+        skippedPlayerId,
+        reassignedPlayerId,
+        round: turn.round,
+        at: Date.now(),
+        votes,
+        threshold
+      });
+      // Reassign this same turn instead of consuming a veto slot. That keeps
+      // the requested finalist count intact even when someone is skipped.
+      turn.playerId = reassignedPlayerId;
+      room.skipVotes = {};
+      room.turnStartedAt = Date.now();
     }
     return true;
   });
@@ -1621,6 +1752,11 @@ function restartRoom() {
     if (!player?.host) return 'Only the host can restart the room.';
     room.remainingIds = [...room.candidateIds];
     room.vetoes = [];
+    room.skips = [];
+    room.skipVotes = {};
+    room.turnStartedAt = null;
+    const possibleVetoes = Math.max(0, room.candidateIds.length - room.settings.finalistCount);
+    room.turns = makeTurnPlan(room.players, room.settings.roundCount, room.settings.turnOrder).slice(0, possibleVetoes);
     room.status = 'lobby';
     return true;
   });
@@ -1700,22 +1836,60 @@ function renderVoting(room, player) {
   const activeName = room.players.find(seat => seat.id === turn?.playerId)?.name || 'Unknown';
   const remaining = room.remainingIds.map(id => roomCandidateGame(room, id)).filter(Boolean);
   const local = roomMode === 'local';
+  const canNamePicker = maySeePickerName(room, player);
+  const stallMode = room.settings?.stallMode || 'none';
+  const timerOpen = timerHasOpened(room);
+  const mayVeto = active || timerOpen;
+  const seconds = timerSecondsRemaining(room);
+  const votes = skipVoteCount(room);
+  const threshold = skipThreshold(room);
+  const hasSkipVote = Boolean(room.skipVotes?.[player.id]);
 
-  return `<div class="device-head">
+  let pickerStatusHtml;
+  let waitingMessage;
+  if (timerOpen) {
+    pickerStatusHtml = 'Open veto — first click wins';
+    waitingMessage = 'The 20-second timer expired. The first connected player to veto a game gets it.';
+  } else if (active) {
+    pickerStatusHtml = stallMode === 'timer'
+      ? `Choose a veto · <span data-turn-countdown>${seconds}s</span>`
+      : 'Choose a veto';
+    waitingMessage = 'Choose one game to veto.';
+  } else if (canNamePicker) {
+    pickerStatusHtml = stallMode === 'timer'
+      ? `${esc(activeName)} is choosing · <span data-turn-countdown>${seconds}s</span>`
+      : `${esc(activeName)} is choosing`;
+    waitingMessage = `Waiting for ${activeName} to veto a game.`;
+  } else {
+    pickerStatusHtml = stallMode === 'timer'
+      ? `Someone is choosing · <span data-turn-countdown>${seconds}s</span>`
+      : 'Someone is choosing';
+    waitingMessage = 'Waiting for the assigned picker to veto a game.';
+  }
+
+  const skipControl = stallMode === 'vote'
+    ? `<button id="skipVote" class="btn ${hasSkipVote ? 'danger' : 'secondary'}" type="button">${hasSkipVote ? 'Withdraw skip vote' : 'Vote to skip this turn'} · ${votes}/${threshold}</button>
+       <div class="help">At least ${threshold} of ${room.players.length} vetoers must agree. If the vote passes, this same veto is reassigned to the next player.</div>`
+    : '';
+
+  return `<div id="turnAccessState" data-timer-open="${timerOpen ? 'true' : 'false'}">
+    <div class="device-head">
       <div><div class="tiny">${local ? 'SHARED-DEVICE SEAT' : 'SIGNED IN AS'}</div><h2>${esc(player.name)}</h2></div>
-      <span class="pill ${active ? 'good' : 'warn'}">${active ? 'Your turn' : 'Waiting'}</span>
+      <span class="pill ${active || timerOpen ? 'good' : 'warn'}">${active ? 'Your turn' : timerOpen ? 'Open veto' : 'Waiting'}</span>
     </div>
     <div class="statusline">
       <span class="pill good">Round ${turn?.round || room.settings.roundCount} of ${room.settings.roundCount}</span>
       <span class="pill">${room.remainingIds.length} games remain</span>
-      <span class="pill ${active ? 'good' : 'warn'}">${active ? 'Choose a veto' : `${esc(activeName)} is choosing`}</span>
+      <span class="pill ${active || timerOpen ? 'good' : 'warn'}">${pickerStatusHtml}</span>
     </div>
-    ${active
-      ? `<div class="formula"><strong>Choose one game to veto.</strong><br>${local ? 'Pass the device when the next vetoer is called.' : 'The result will update on every connected device.'}</div>
+    ${skipControl}
+    ${mayVeto
+      ? `<div class="formula"><strong>${esc(waitingMessage)}</strong><br>${local ? 'Pass the device when the next vetoer is called.' : timerOpen ? 'Firebase resolves simultaneous clicks, so only the first valid veto is accepted.' : 'The result will update on every connected device.'}</div>
         <div class="grid" style="margin-top:12px">${remaining.map(game => gameCard(game, { veto: true })).join('')}</div>`
-      : `<div class="waiting">Waiting for <b>${esc(activeName)}</b> to veto a game.${local ? '<br><span class="tiny">Tap their name above to switch seats.</span>' : ''}</div>
+      : `<div class="waiting">${esc(waitingMessage)}${local ? '<br><span class="tiny">Tap a seat above to switch players.</span>' : ''}</div>
         <div class="grid" style="margin-top:12px">${remaining.map(game => gameCard(game)).join('')}</div>`}
-    ${player.host ? '<button id="randomVeto" class="btn secondary" type="button">Perform current veto randomly</button>' : ''}`;
+    ${player.host ? '<button id="randomVeto" class="btn secondary" type="button">Perform current veto randomly</button>' : ''}
+  </div>`;
 }
 
 function renderResults(room, player) {
@@ -1727,25 +1901,42 @@ function renderResults(room, player) {
     <div class="winner">
       <div class="tiny">LAST GAME${finalists.length === 1 ? '' : 'S'} STANDING</div>
       <h2>${finalists.map(game => esc(game.displayTitle)).join('<br>')}</h2>
-      <div class="summary">${room.vetoes.length} veto${room.vetoes.length === 1 ? '' : 'es'} completed.</div>
+      <div class="summary">${room.vetoes.length} veto${room.vetoes.length === 1 ? '' : 'es'} completed${room.skips?.length ? `; ${room.skips.length} turn${room.skips.length === 1 ? '' : 's'} skipped` : ''}.</div>
     </div>
     <div class="grid" style="margin-top:14px">${finalists.map(game => gameCard(game)).join('')}</div>
     ${player.host ? '<button id="restartRoom" class="btn secondary" type="button">Restart same session</button>' : ''}`;
 }
 
-function renderHistory(room) {
-  if (!room.vetoes.length) {
+function renderHistory(room, viewer) {
+  const vetoEntries = (room.vetoes || []).map(veto => ({ ...veto, kind: 'veto' }));
+  const skipEntries = (room.skips || []).map(skip => ({ ...skip, kind: 'skip' }));
+  const entries = [...vetoEntries, ...skipEntries].sort((a, b) => Number(a.at || 0) - Number(b.at || 0));
+  if (!entries.length) {
     $('roomHistoryWrap').innerHTML = '';
     return;
   }
 
-  const rows = room.vetoes.map(v => {
-    const player = room.players.find(x => x.id === v.playerId);
-    const game = roomCandidateGame(room, v.gameId);
-    const text = room.settings.privacy === 'public'
-      ? `<b>${esc(player?.name || 'Unknown')}</b> vetoed ${esc(game?.displayTitle || v.gameId)}`
-      : `<b>${esc(game?.displayTitle || v.gameId)}</b> was vetoed`;
-    return `<div class="history-row"><span>${text}</span><span class="pill">Round ${v.round}</span></div>`;
+  const showNames = room.settings?.privacy === 'public' || Boolean(viewer?.host);
+  const rows = entries.map(entry => {
+    if (entry.kind === 'skip') {
+      const skipped = room.players.find(player => player.id === entry.skippedPlayerId);
+      const replacement = room.players.find(player => player.id === entry.reassignedPlayerId);
+      const text = showNames
+        ? `<b>${esc(skipped?.name || 'Unknown')}</b>'s turn was skipped; <b>${esc(replacement?.name || 'the next player')}</b> received the veto.`
+        : 'A picker’s turn was skipped and reassigned.';
+      return `<div class="history-row"><span>${text}</span><span class="pill">Round ${entry.round}</span></div>`;
+    }
+
+    const player = room.players.find(x => x.id === entry.playerId);
+    const assignedPlayer = room.players.find(x => x.id === entry.turnPlayerId);
+    const game = roomCandidateGame(room, entry.gameId);
+    let text = showNames
+      ? `<b>${esc(player?.name || 'Unknown')}</b> vetoed ${esc(game?.displayTitle || entry.gameId)}`
+      : `<b>${esc(game?.displayTitle || entry.gameId)}</b> was vetoed`;
+    if (showNames && entry.timerTakeover && assignedPlayer && assignedPlayer.id !== player?.id) {
+      text += ` <span class="tiny">after ${esc(assignedPlayer.name)}’s timer expired</span>`;
+    }
+    return `<div class="history-row"><span>${text}</span><span class="pill">Round ${entry.round}</span></div>`;
   }).join('');
 
   $('roomHistoryWrap').innerHTML = `<div class="section-title">Veto history</div><div class="history">${rows}</div>`;
@@ -1772,10 +1963,14 @@ function renderRoom() {
   }
 
   const turn = currentTurn(room);
+  const activePlayer = room.players.find(seat => seat.id === turn?.playerId);
+  const hostPickerDetail = room.status === 'voting' && player.host && activePlayer
+    ? ` Current picker: ${activePlayer.name}.`
+    : '';
   $('roomStateSummary').textContent = room.status === 'lobby'
     ? `${room.players.filter(seat => seat.joined && (local || seat.uid)).length}/${room.players.length} vetoers joined.`
     : room.status === 'voting'
-      ? `Round ${turn?.round || room.settings.roundCount}; ${room.remainingIds.length} games remain.`
+      ? `Round ${turn?.round || room.settings.roundCount}; ${room.remainingIds.length} games remain.${hostPickerDetail}`
       : `${room.remainingIds.length} finalist${room.remainingIds.length === 1 ? '' : 's'} remain.`;
 
   $('devicePanel').innerHTML = room.status === 'lobby'
@@ -1784,7 +1979,7 @@ function renderRoom() {
       ? renderVoting(room, player)
       : renderResults(room, player);
 
-  renderHistory(room);
+  renderHistory(room, player);
 
   const join = $('joinDevice');
   if (join) join.addEventListener('click', () => joinPlayer($('deviceName').value));
@@ -1798,6 +1993,8 @@ function renderRoom() {
   if (auto) auto.addEventListener('click', autoJoinAll);
   const start = $('startRoom');
   if (start) start.addEventListener('click', startRoom);
+  const skip = $('skipVote');
+  if (skip) skip.addEventListener('click', toggleSkipVote);
   const random = $('randomVeto');
   if (random) random.addEventListener('click', randomVeto);
   const restart = $('restartRoom');
@@ -1836,6 +2033,7 @@ $('privacyMode').addEventListener('change', () => {
   applyPrivacyTurnOrderDefault();
   renderVetoPreview();
 });
+$('stallMode').addEventListener('change', renderVetoPreview);
 
 $('singleDeviceMode').addEventListener('change', updateRoomModeUI);
 $('createRoomButton').addEventListener('click', createRoom);
